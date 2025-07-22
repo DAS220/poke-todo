@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>포켓몬 To-Do 리스트 (오프라인 최종판)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        .task-item:hover { background-color: #2d3748; }
+        .rarity-common { background: linear-gradient(135deg, #a0aec0 0%, #718096 100%); }
+        .rarity-rare { background: linear-gradient(135deg, #63b3ed 0%, #4299e1 100%); }
+        .rarity-epic { background: linear-gradient(135deg, #b794f4 0%, #9f7aea 100%); }
+        .rarity-legendary { background: linear-gradient(135deg, #f6e05e 0%, #f6ad55 100%); }
+        .modal-bg { background-color: rgba(0, 0, 0, 0.7); }
+        .pokeball-animation { animation: shake 1.2s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0) rotate(0deg); }
+            20%, 80% { transform: translate3d(2px, 0, 0) rotate(5deg); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0) rotate(-5deg); }
+            40%, 60% { transform: translate3d(4px, 0, 0) rotate(5deg); }
+        }
+        .shine-effect::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%);
+            transform: rotate(25deg); animation: shine 1.5s infinite;
+        }
+        @keyframes shine { 0% { left: -120%; } 100% { left: 120%; } }
+        .pokedex-list-item.selected { background-color: #4a5568; border-left: 4px solid #63b3ed; }
+        .pokemon-silhouette { filter: brightness(0) contrast(100%); opacity: 0.8; }
+        .pokedex-container { height: 450px; }
+        .shiny-pokemon-image { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 3px #fff); }
+        .shiny-text { color: #fefcbf; text-shadow: 0 0 5px #fefcbf; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div id="app-container">
+        <div class="container mx-auto p-4 max-w-7xl">
+            <header class="text-center my-6">
+                <h1 class="text-4xl md:text-5xl font-bold text-yellow-400" style="text-shadow: 2px 2px 4px #000;">포켓몬 To-Do 리스트 (오프라인)</h1>
+                <p class="text-gray-400 mt-2">할 일을 완료하고 포켓몬을 수집하세요!</p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Left Panel -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col gap-8">
+                    <!-- To-Do List Section -->
+                    <div>
+                        <h2 class="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">오늘의 할 일</h2>
+                        <form id="todo-form" class="flex gap-2 mb-4">
+                            <input type="text" id="todo-input" placeholder="새로운 할 일을 입력하세요..." class="flex-grow bg-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">추가</button>
+                        </form>
+                        <ul id="todo-list" class="space-y-2 max-h-60 overflow-y-auto pr-2"></ul>
+                    </div>
+                    <!-- Inventory Section -->
+                    <div>
+                        <h2 class="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">보유 아이템</h2>
+                        <div id="inventory-list" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Right Panel -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <div class="flex border-b border-gray-700 mb-4">
+                        <button id="main-tab-pokedex" class="flex-1 py-2 text-center font-semibold border-b-2 border-blue-500 text-white">도감</button>
+                        <button id="main-tab-shop" class="flex-1 py-2 text-center font-semibold text-gray-500">상점</button>
+                    </div>
+
+                    <!-- Pokedex View -->
+                    <div id="pokedex-view">
+                        <div class="flex justify-between items-center pb-2 mb-4">
+                            <h2 class="text-2xl font-bold">나의 도감</h2>
+                            <p id="pokedex-progress" class="text-sm text-gray-400 font-medium"></p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-4 items-center">
+                            <select id="generation-filter" class="bg-gray-700 rounded-lg px-3 py-1"><option value="all">모든 세대</option></select>
+                            <select id="rarity-filter" class="bg-gray-700 rounded-lg px-3 py-1"><option value="all">모든 등급</option></select>
+                        </div>
+                        <div class="flex border-b border-gray-700 mb-4">
+                            <button id="pokedex-tab-collected" class="flex-1 py-2 text-center font-semibold border-b-2 border-blue-500 text-white">수집됨</button>
+                            <button id="pokedex-tab-duplicates" class="flex-1 py-2 text-center font-semibold text-gray-500">중복</button>
+                            <button id="pokedex-tab-uncollected" class="flex-1 py-2 text-center font-semibold text-gray-500">미수집</button>
+                        </div>
+                        <div class="pokedex-container grid grid-cols-1 md:grid-cols-12 gap-4 mt-4">
+                            <div id="pokedex-list-container" class="md:col-span-5 h-full overflow-y-auto pr-2 space-y-1"></div>
+                            <div id="pokemon-detail-view" class="md:col-span-7 h-full flex flex-col items-center justify-center bg-gray-900/50 rounded-lg p-4"></div>
+                        </div>
+                        <div id="synthesis-controls" class="mt-4 text-center hidden">
+                            <p class="mb-2 text-gray-400"><span id="synthesis-count">0</span>/3 개의 중복 포켓몬 선택됨</p>
+                            <button id="synthesis-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-600" disabled>합성하기</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Shop View -->
+                    <div id="shop-view" class="hidden">
+                         <h2 class="text-2xl font-bold mb-4">상점</h2>
+                         <div class="space-y-6">
+                            <div>
+                                <h3 class="text-xl font-semibold mb-3 text-yellow-400 border-b border-gray-700 pb-1">아이템 판매</h3>
+                                <div id="shop-sell-list" class="space-y-2"></div>
+                            </div>
+                             <div>
+                                <h3 class="text-xl font-semibold mb-3 text-green-400 border-b border-gray-700 pb-1">아이템 구매</h3>
+                                <div id="shop-buy-list" class="space-y-2"></div>
+                            </div>
+                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Page -->
+    <div id="admin-page" class="fixed inset-0 bg-gray-900 z-40 hidden p-4 sm:p-8">
+        <div class="w-full max-w-4xl mx-auto bg-gray-800 rounded-xl shadow-2xl flex flex-col h-full">
+            <header class="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
+                <h2 class="text-2xl font-bold text-yellow-400">관리자 페이지</h2>
+                <button id="admin-close-btn" class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </header>
+            <div class="flex-grow p-4 overflow-y-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Probability Settings -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-2 text-green-400">뽑기 확률 설정 (%)</h3>
+                        <div id="admin-probability-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                    </section>
+                     <!-- Shop Settings -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-2 text-blue-400">상점 가격 설정 (코인)</h3>
+                        <div id="admin-shop-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                    </section>
+                </div>
+                 <!-- Pokemon Edit -->
+                <section class="mt-6">
+                    <h3 class="text-xl font-bold mb-2 text-purple-400">포켓몬 보유 수량 편집</h3>
+                    <div id="admin-pokemon-list" class="bg-gray-900 p-4 rounded-lg max-h-64 overflow-y-auto"></div>
+                </section>
+            </div>
+            <footer class="p-4 border-t border-gray-700 flex-shrink-0">
+                <button id="admin-save-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">모든 변경사항 저장</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-caught" class="fixed inset-0 modal-bg flex items-center justify-center z-20 hidden">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl p-8 text-center max-w-sm w-full relative overflow-hidden">
+            <div id="pokeball-container" class="mb-4"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png" alt="포켓볼" class="w-32 h-32 mx-auto"></div>
+            <div id="caught-pokemon-info" class="hidden">
+                <h2 class="text-3xl font-bold mb-2" id="pokemon-name"></h2>
+                <div class="relative inline-block">
+                    <img id="pokemon-image" src="" alt="잡은 포켓몬" class="mx-auto h-48 w-48 object-contain mb-4">
+                    <div id="pokemon-shine" class="hidden shine-effect"></div>
+                </div>
+                <div class="flex justify-center items-center gap-2 mb-4">
+                    <span id="pokemon-rarity" class="px-3 py-1 text-sm font-semibold text-white rounded-full"></span>
+                    <span class="text-gray-400 text-sm" id="pokemon-id"></span>
+                </div>
+                <p id="pokemon-is-new" class="text-yellow-400 font-bold text-lg mb-4"></p>
+                <button id="modal-close-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">확인</button>
+            </div>
+        </div>
+    </div>
+    <div id="modal-test-alert" class="fixed inset-0 modal-bg flex items-center justify-center z-30 hidden">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl p-8 text-center max-w-sm w-full relative">
+            <h2 class="text-2xl font-bold mb-4 text-yellow-400">테스트 모드 활성화</h2>
+            <p class="text-gray-300 mb-6">10마리의 포켓몬이 도감에 추가되었습니다. (중복 3마리 포함)</p>
+            <button id="modal-test-close-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">확인</button>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const POKEMON_DATA=[{id:1,name:"이상해씨",gen:1,rarity:"Common"},{id:2,name:"이상해풀",gen:1,rarity:"Common"},{id:3,name:"이상해꽃",gen:1,rarity:"Rare"},{id:4,name:"파이리",gen:1,rarity:"Common"},{id:5,name:"리자드",gen:1,rarity:"Common"},{id:6,name:"리자몽",gen:1,rarity:"Rare"},{id:7,name:"꼬부기",gen:1,rarity:"Common"},{id:8,name:"어니부기",gen:1,rarity:"Common"},{id:9,name:"거북왕",gen:1,rarity:"Rare"},{id:10,name:"캐터피",gen:1,rarity:"Common"},{id:11,name:"단데기",gen:1,rarity:"Common"},{id:12,name:"버터플",gen:1,rarity:"Common"},{id:13,name:"뿔충이",gen:1,rarity:"Common"},{id:14,name:"딱충이",gen:1,rarity:"Common"},{id:15,name:"독침붕",gen:1,rarity:"Common"},{id:16,name:"구구",gen:1,rarity:"Common"},{id:17,name:"피죤",gen:1,rarity:"Common"},{id:18,name:"피죤투",gen:1,rarity:"Rare"},{id:19,name:"꼬렛",gen:1,rarity:"Common"},{id:20,name:"레트라",gen:1,rarity:"Common"},{id:21,name:"깨비참",gen:1,rarity:"Common"},{id:22,name:"깨비드릴조",gen:1,rarity:"Common"},{id:23,name:"아보",gen:1,rarity:"Common"},{id:24,name:"아보크",gen:1,rarity:"Common"},{id:25,name:"피카츄",gen:1,rarity:"Rare"},{id:26,name:"라이츄",gen:1,rarity:"Rare"},{id:27,name:"모래두지",gen:1,rarity:"Common"},{id:28,name:"고지",gen:1,rarity:"Common"},{id:29,name:"니드런♀",gen:1,rarity:"Common"},{id:30,name:"니드리나",gen:1,rarity:"Common"},{id:31,name:"니드퀸",gen:1,rarity:"Rare"},{id:32,name:"니드런♂",gen:1,rarity:"Common"},{id:33,name:"니드라노",gen:1,rarity:"Common"},{id:34,name:"니드킹",gen:1,rarity:"Rare"},{id:35,name:"삐삐",gen:1,rarity:"Rare"},{id:36,name:"픽시",gen:1,rarity:"Rare"},{id:37,name:"식스테일",gen:1,rarity:"Rare"},{id:38,name:"나인테일",gen:1,rarity:"Rare"},{id:39,name:"푸린",gen:1,rarity:"Common"},{id:40,name:"푸크린",gen:1,rarity:"Common"},{id:41,name:"주뱃",gen:1,rarity:"Common"},{id:42,name:"골뱃",gen:1,rarity:"Common"},{id:43,name:"뚜벅쵸",gen:1,rarity:"Common"},{id:44,name:"냄새꼬",gen:1,rarity:"Common"},{id:45,name:"라플레시아",gen:1,rarity:"Rare"},{id:46,name:"파라스",gen:1,rarity:"Common"},{id:47,name:"파라섹트",gen:1,rarity:"Common"},{id:48,name:"콘팡",gen:1,rarity:"Common"},{id:49,name:"도나리",gen:1,rarity:"Common"},{id:50,name:"디그다",gen:1,rarity:"Common"},{id:51,name:"닥트리오",gen:1,rarity:"Common"},{id:52,name:"나옹",gen:1,rarity:"Common"},{id:53,name:"페르시온",gen:1,rarity:"Rare"},{id:54,name:"고라파덕",gen:1,rarity:"Common"},{id:55,name:"골덕",gen:1,rarity:"Common"},{id:56,name:"망키",gen:1,rarity:"Common"},{id:57,name:"성원숭",gen:1,rarity:"Common"},{id:58,name:"가디",gen:1,rarity:"Rare"},{id:59,name:"윈디",gen:1,rarity:"Rare"},{id:60,name:"발챙이",gen:1,rarity:"Common"},{id:61,name:"슈륙챙이",gen:1,rarity:"Common"},{id:62,name:"강챙이",gen:1,rarity:"Rare"},{id:63,name:"케이시",gen:1,rarity:"Rare"},{id:64,name:"윤겔라",gen:1,rarity:"Rare"},{id:65,name:"후디",gen:1,rarity:"Epic"},{id:66,name:"알통몬",gen:1,rarity:"Common"},{id:67,name:"근육몬",gen:1,rarity:"Common"},{id:68,name:"괴력몬",gen:1,rarity:"Rare"},{id:69,name:"모다피",gen:1,rarity:"Common"},{id:70,name:"우츠동",gen:1,rarity:"Common"},{id:71,name:"우츠보트",gen:1,rarity:"Rare"},{id:72,name:"왕눈해",gen:1,rarity:"Common"},{id:73,name:"독파리",gen:1,rarity:"Common"},{id:74,name:"꼬마돌",gen:1,rarity:"Common"},{id:75,name:"데구리",gen:1,rarity:"Common"},{id:76,name:"딱구리",gen:1,rarity:"Rare"},{id:77,name:"포니타",gen:1,rarity:"Rare"},{id:78,name:"날쌩마",gen:1,rarity:"Rare"},{id:79,name:"야돈",gen:1,rarity:"Rare"},{id:80,name:"야도란",gen:1,rarity:"Rare"},{id:81,name:"코일",gen:1,rarity:"Common"},{id:82,name:"레어코일",gen:1,rarity:"Common"},{id:83,name:"파오리",gen:1,rarity:"Rare"},{id:84,name:"두두",gen:1,rarity:"Common"},{id:85,name:"두트리오",gen:1,rarity:"Common"},{id:86,name:"쥬쥬",gen:1,rarity:"Common"},{id:87,name:"쥬레곤",gen:1,rarity:"Common"},{id:88,name:"질퍽이",gen:1,rarity:"Common"},{id:89,name:"질뻐기",gen:1,rarity:"Common"},{id:90,name:"셀러",gen:1,rarity:"Rare"},{id:91,name:"파르셀",gen:1,rarity:"Rare"},{id:92,name:"고오스",gen:1,rarity:"Rare"},{id:93,name:"고우스트",gen:1,rarity:"Rare"},{id:94,name:"팬텀",gen:1,rarity:"Epic"},{id:95,name:"롱스톤",gen:1,rarity:"Rare"},{id:96,name:"슬리프",gen:1,rarity:"Common"},{id:97,name:"슬리퍼",gen:1,rarity:"Common"},{id:98,name:"크랩",gen:1,rarity:"Common"},{id:99,name:"킹크랩",gen:1,rarity:"Common"},{id:100,name:"찌리리공",gen:1,rarity:"Common"},{id:101,name:"붐볼",gen:1,rarity:"Common"},{id:102,name:"아라리",gen:1,rarity:"Common"},{id:103,name:"나시",gen:1,rarity:"Rare"},{id:104,name:"탕구리",gen:1,rarity:"Common"},{id:105,name:"텅구리",gen:1,rarity:"Common"},{id:106,name:"시라소몬",gen:1,rarity:"Rare"},{id:107,name:"홍수몬",gen:1,rarity:"Rare"},{id:108,name:"내루미",gen:1,rarity:"Rare"},{id:109,name:"또가스",gen:1,rarity:"Common"},{id:110,name:"또도가스",gen:1,rarity:"Common"},{id:111,name:"뿔카노",gen:1,rarity:"Common"},{id:112,name:"코뿌리",gen:1,rarity:"Rare"},{id:113,name:"럭키",gen:1,rarity:"Epic"},{id:114,name:"덩쿠리",gen:1,rarity:"Rare"},{id:115,name:"캥카",gen:1,rarity:"Epic"},{id:116,name:"쏘드라",gen:1,rarity:"Common"},{id:117,name:"시드라",gen:1,rarity:"Common"},{id:118,name:"콘치",gen:1,rarity:"Common"},{id:119,name:"왕콘치",gen:1,rarity:"Common"},{id:120,name:"별가사리",gen:1,rarity:"Common"},{id:121,name:"아쿠스타",gen:1,rarity:"Rare"},{id:122,name:"마임맨",gen:1,rarity:"Rare"},{id:123,name:"스라크",gen:1,rarity:"Epic"},{id:124,name:"루주라",gen:1,rarity:"Rare"},{id:125,name:"에레브",gen:1,rarity:"Rare"},{id:126,name:"마그마",gen:1,rarity:"Rare"},{id:127,name:"쁘사이저",gen:1,rarity:"Epic"},{id:128,name:"켄타로스",gen:1,rarity:"Rare"},{id:129,name:"잉어킹",gen:1,rarity:"Common"},{id:130,name:"갸라도스",gen:1,rarity:"Epic"},{id:131,name:"라프라스",gen:1,rarity:"Epic"},{id:132,name:"메타몽",gen:1,rarity:"Rare"},{id:133,name:"이브이",gen:1,rarity:"Rare"},{id:134,name:"샤미드",gen:1,rarity:"Rare"},{id:135,name:"쥬피썬더",gen:1,rarity:"Rare"},{id:136,name:"부스터",gen:1,rarity:"Rare"},{id:137,name:"폴리곤",gen:1,rarity:"Rare"},{id:138,name:"암나이트",gen:1,rarity:"Rare"},{id:139,name:"암스타",gen:1,rarity:"Rare"},{id:140,name:"투구",gen:1,rarity:"Rare"},{id:141,name:"투구푸스",gen:1,rarity:"Rare"},{id:142,name:"프테라",gen:1,rarity:"Epic"},{id:143,name:"잠만보",gen:1,rarity:"Epic"},{id:144,name:"프리져",gen:1,rarity:"Legendary"},{id:145,name:"썬더",gen:1,rarity:"Legendary"},{id:146,name:"파이어",gen:1,rarity:"Legendary"},{id:147,name:"미뇽",gen:1,rarity:"Rare"},{id:148,name:"신뇽",gen:1,rarity:"Epic"},{id:149,name:"망나뇽",gen:1,rarity:"Epic"},{id:150,name:"뮤츠",gen:1,rarity:"Legendary"},{id:151,name:"뮤",gen:1,rarity:"Legendary"},{id:152,name:"치코리타",gen:2,rarity:"Common"},{id:153,name:"베이리프",gen:2,rarity:"Common"},{id:154,name:"메가니움",gen:2,rarity:"Rare"},{id:155,name:"브케인",gen:2,rarity:"Common"},{id:156,name:"마그케인",gen:2,rarity:"Common"},{id:157,name:"블레이범",gen:2,rarity:"Rare"},{id:158,name:"리아코",gen:2,rarity:"Common"},{id:159,name:"엘리게이",gen:2,rarity:"Common"},{id:160,name:"장크로다일",gen:2,rarity:"Rare"},{id:161,name:"꼬리선",gen:2,rarity:"Common"},{id:162,name:"다꼬리",gen:2,rarity:"Common"},{id:163,name:"부우부",gen:2,rarity:"Common"},{id:164,name:"야부엉",gen:2,rarity:"Common"},{id:165,name:"레디바",gen:2,rarity:"Common"},{id:166,name:"레디안",gen:2,rarity:"Common"},{id:167,name:"페이검",gen:2,rarity:"Common"},{id:168,name:"아리아도스",gen:2,rarity:"Common"},{id:169,name:"크로뱃",gen:2,rarity:"Rare"},{id:170,name:"초라기",gen:2,rarity:"Common"},{id:171,name:"랜턴",gen:2,rarity:"Common"},{id:172,name:"피츄",gen:2,rarity:"Rare"},{id:173,name:"삐",gen:2,rarity:"Rare"},{id:174,name:"푸푸린",gen:2,rarity:"Common"},{id:175,name:"토게피",gen:2,rarity:"Rare"},{id:176,name:"토게틱",gen:2,rarity:"Rare"},{id:177,name:"네이티",gen:2,rarity:"Common"},{id:178,name:"네이티오",gen:2,rarity:"Common"},{id:179,name:"메리프",gen:2,rarity:"Common"},{id:180,name:"보송송",gen:2,rarity:"Common"},{id:181,name:"전룡",gen:2,rarity:"Rare"},{id:182,name:"아르코",gen:2,rarity:"Rare"},{id:183,name:"마릴",gen:2,rarity:"Common"},{id:184,name:"마릴리",gen:2,rarity:"Common"},{id:185,name:"꼬지모",gen:2,rarity:"Rare"},{id:186,name:"왕구리",gen:2,rarity:"Rare"},{id:187,name:"통통코",gen:2,rarity:"Common"},{id:188,name:"두코",gen:2,rarity:"Common"},{id:189,name:"솜솜코",gen:2,rarity:"Common"},{id:190,name:"에이팜",gen:2,rarity:"Common"},{id:191,name:"해너츠",gen:2,rarity:"Common"},{id:192,name:"해루미",gen:2,rarity:"Common"},{id:193,name:"왕자리",gen:2,rarity:"Common"},{id:194,name:"우파",gen:2,rarity:"Common"},{id:195,name:"누오",gen:2,rarity:"Common"},{id:196,name:"에브이",gen:2,rarity:"Rare"},{id:197,name:"블래키",gen:2,rarity:"Rare"},{id:198,name:"니로우",gen:2,rarity:"Common"},{id:199,name:"야도킹",gen:2,rarity:"Epic"},{id:200,name:"무우마",gen:2,rarity:"Common"},{id:201,name:"안농",gen:2,rarity:"Epic"},{id:202,name:"마자용",gen:2,rarity:"Common"},{id:203,name:"키링키",gen:2,rarity:"Rare"},{id:204,name:"피콘",gen:2,rarity:"Common"},{id:205,name:"쏘콘",gen:2,rarity:"Rare"},{id:206,name:"노고치",gen:2,rarity:"Common"},{id:207,name:"글라이거",gen:2,rarity:"Common"},{id:208,name:"강철톤",gen:2,rarity:"Epic"},{id:209,name:"블루",gen:2,rarity:"Common"},{id:210,name:"그랑블루",gen:2,rarity:"Common"},{id:211,name:"침바루",gen:2,rarity:"Common"},{id:212,name:"핫삼",gen:2,rarity:"Epic"},{id:213,name:"단단지",gen:2,rarity:"Rare"},{id:214,name:"헤라크로스",gen:2,rarity:"Epic"},{id:215,name:"포푸니",gen:2,rarity:"Rare"},{id:216,name:"깜지곰",gen:2,rarity:"Common"},{id:217,name:"링곰",gen:2,rarity:"Common"},{id:218,name:"마그마그",gen:2,rarity:"Common"},{id:219,name:"마그카르고",gen:2,rarity:"Common"},{id:220,name:"꾸꾸리",gen:2,rarity:"Common"},{id:221,name:"메꾸리",gen:2,rarity:"Common"},{id:222,name:"코산호",gen:2,rarity:"Common"},{id:223,name:"총어",gen:2,rarity:"Common"},{id:224,name:"대포무노",gen:2,rarity:"Common"},{id:225,name:"딜리버드",gen:2,rarity:"Rare"},{id:226,name:"만타인",gen:2,rarity:"Common"},{id:227,name:"무장조",gen:2,rarity:"Epic"},{id:228,name:"델빌",gen:2,rarity:"Common"},{id:229,name:"헬가",gen:2,rarity:"Rare"},{id:230,name:"킹드라",gen:2,rarity:"Rare"},{id:231,name:"코코리",gen:2,rarity:"Common"},{id:232,name:"코리갑",gen:2,rarity:"Rare"},{id:233,name:"폴리곤2",gen:2,rarity:"Epic"},{id:234,name:"노라키",gen:2,rarity:"Common"},{id:235,name:"루브도",gen:2,rarity:"Rare"},{id:236,name:"배루키",gen:2,rarity:"Rare"},{id:237,name:"카포에라",gen:2,rarity:"Rare"},{id:238,name:"뽀뽀라",gen:2,rarity:"Rare"},{id:239,name:"에레키드",gen:2,rarity:"Rare"},{id:240,name:"마그비",gen:2,rarity:"Rare"},{id:241,name:"밀탱크",gen:2,rarity:"Rare"},{id:242,name:"해피너스",gen:2,rarity:"Epic"},{id:243,name:"라이코",gen:2,rarity:"Legendary"},{id:244,name:"앤테이",gen:2,rarity:"Legendary"},{id:245,name:"스이쿤",gen:2,rarity:"Legendary"},{id:246,name:"애버라스",gen:2,rarity:"Rare"},{id:247,name:"데기라스",gen:2,rarity:"Epic"},{id:248,name:"마기라스",gen:2,rarity:"Epic"},{id:249,name:"루기아",gen:2,rarity:"Legendary"},{id:250,name:"칠색조",gen:2,rarity:"Legendary"},{id:251,name:"세레비",gen:2,rarity:"Legendary"},{id:252,name:"나무지기",gen:3,rarity:"Common"},{id:253,name:"나무돌이",gen:3,rarity:"Common"},{id:254,name:"나무킹",gen:3,rarity:"Rare"},{id:255,name:"아차모",gen:3,rarity:"Common"},{id:256,name:"영치코",gen:3,rarity:"Common"},{id:257,name:"번치코",gen:3,rarity:"Rare"},{id:258,name:"물짱이",gen:3,rarity:"Common"},{id:259,name:"늪짱이",gen:3,rarity:"Common"},{id:260,name:"대짱이",gen:3,rarity:"Rare"},{id:261,name:"포챠나",gen:3,rarity:"Common"},{id:262,name:"그라에나",gen:3,rarity:"Common"},{id:263,name:"지그제구리",gen:3,rarity:"Common"},{id:264,name:"직구리",gen:3,rarity:"Common"},{id:265,name:"개무소",gen:3,rarity:"Common"},{id:266,name:"실쿤",gen:3,rarity:"Common"},{id:267,name:"뷰티플라이",gen:3,rarity:"Common"},{id:268,name:"카스쿤",gen:3,rarity:"Common"},{id:269,name:"독케일",gen:3,rarity:"Common"},{id:270,name:"연꽃몬",gen:3,rarity:"Common"},{id:271,name:"로토스",gen:3,rarity:"Common"},{id:272,name:"로파파",gen:3,rarity:"Rare"},{id:273,name:"도토링",gen:3,rarity:"Common"},{id:274,name:"잎새코",gen:3,rarity:"Common"},{id:275,name:"다탱구",gen:3,rarity:"Rare"},{id:276,name:"테일로",gen:3,rarity:"Common"},{id:277,name:"스왈로",gen:3,rarity:"Common"},{id:278,name:"갈모매",gen:3,rarity:"Common"},{id:279,name:"패리퍼",gen:3,rarity:"Common"},{id:280,name:"랄토스",gen:3,rarity:"Rare"},{id:281,name:"킬리아",gen:3,rarity:"Rare"},{id:282,name:"가디안",gen:3,rarity:"Epic"},{id:283,name:"비구술",gen:3,rarity:"Common"},{id:284,name:"비나방",gen:3,rarity:"Common"},{id:285,name:"버섯꼬",gen:3,rarity:"Common"},{id:286,name:"버섯모",gen:3,rarity:"Rare"},{id:287,name:"게을로",gen:3,rarity:"Common"},{id:288,name:"발바로",gen:3,rarity:"Common"},{id:289,name:"게을킹",gen:3,rarity:"Rare"},{id:290,name:"토중몬",gen:3,rarity:"Common"},{id:291,name:"아이스크",gen:3,rarity:"Rare"},{id:292,name:"껍질몬",gen:3,rarity:"Epic"},{id:293,name:"소곤룡",gen:3,rarity:"Common"},{id:294,name:"노공룡",gen:3,rarity:"Common"},{id:295,name:"폭음룡",gen:3,rarity:"Rare"},{id:296,name:"마크탕",gen:3,rarity:"Common"},{id:297,name:"하리뭉",gen:3,rarity:"Common"},{id:298,name:"루리리",gen:3,rarity:"Common"},{id:299,name:"코코파스",gen:3,rarity:"Rare"},{id:300,name:"에나비",gen:3,rarity:"Common"},{id:301,name:"델케티",gen:3,rarity:"Common"},{id:302,name:"깜까미",gen:3,rarity:"Rare"},{id:303,name:"입치트",gen:3,rarity:"Rare"},{id:304,name:"가보리",gen:3,rarity:"Common"},{id:305,name:"갱도라",gen:3,rarity:"Common"},{id:306,name:"보스로라",gen:3,rarity:"Epic"},{id:307,name:"요가랑",gen:3,rarity:"Common"},{id:308,name:"요가램",gen:3,rarity:"Common"},{id:309,name:"썬더라이",gen:3,rarity:"Common"},{id:310,name:"썬더볼트",gen:3,rarity:"Rare"},{id:311,name:"플러시",gen:3,rarity:"Rare"},{id:312,name:"마이농",gen:3,rarity:"Rare"},{id:313,name:"볼비트",gen:3,rarity:"Common"},{id:314,name:"네오비트",gen:3,rarity:"Common"},{id:315,name:"로젤리아",gen:3,rarity:"Common"},{id:316,name:"꼴깍몬",gen:3,rarity:"Common"},{id:317,name:"꿀꺽몬",gen:3,rarity:"Common"},{id:318,name:"샤프니아",gen:3,rarity:"Common"},{id:319,name:"샤크니아",gen:3,rarity:"Rare"},{id:320,name:"고래왕자",gen:3,rarity:"Common"},{id:321,name:"고래왕",gen:3,rarity:"Rare"},{id:322,name:"둔타",gen:3,rarity:"Common"},{id:323,name:"폭타",gen:3,rarity:"Rare"},{id:324,name:"코터스",gen:3,rarity:"Common"},{id:325,name:"피그점프",gen:3,rarity:"Common"},{id:326,name:"피그킹",gen:3,rarity:"Common"},{id:327,name:"얼루기",gen:3,rarity:"Common"},{id:328,name:"톱치",gen:3,rarity:"Common"},{id:329,name:"비브라바",gen:3,rarity:"Common"},{id:330,name:"플라이곤",gen:3,rarity:"Epic"},{id:331,name:"선인왕",gen:3,rarity:"Common"},{id:332,name:"밤선인",gen:3,rarity:"Common"},{id:333,name:"파비코",gen:3,rarity:"Common"},{id:334,name:"파비코리",gen:3,rarity:"Rare"},{id:335,name:"쟝고",gen:3,rarity:"Rare"},{id:336,name:"세비퍼",gen:3,rarity:"Rare"},{id:337,name:"루나톤",gen:3,rarity:"Rare"},{id:338,name:"솔록",gen:3,rarity:"Rare"},{id:339,name:"미꾸리",gen:3,rarity:"Common"},{id:340,name:"메깅",gen:3,rarity:"Common"},{id:341,name:"가재군",gen:3,rarity:"Common"},{id:342,name:"가재장군",gen:3,rarity:"Common"},{id:343,name:"오뚝군",gen:3,rarity:"Common"},{id:344,name:"점토도리",gen:3,rarity:"Rare"},{id:345,name:"릴링",gen:3,rarity:"Rare"},{id:346,name:"릴리요",gen:3,rarity:"Rare"},{id:347,name:"아노딥스",gen:3,rarity:"Rare"},{id:348,name:"아말도",gen:3,rarity:"Rare"},{id:349,name:"빈티나",gen:3,rarity:"Rare"},{id:350,name:"밀로틱",gen:3,rarity:"Epic"},{id:351,name:"캐스퐁",gen:3,rarity:"Rare"},{id:352,name:"켈리몬",gen:3,rarity:"Rare"},{id:353,name:"어둠대신",gen:3,rarity:"Common"},{id:354,name:"다크펫",gen:3,rarity:"Rare"},{id:355,name:"해골몽",gen:3,rarity:"Common"},{id:356,name:"미라몽",gen:3,rarity:"Rare"},{id:357,name:"트로피우스",gen:3,rarity:"Rare"},{id:358,name:"치렁",gen:3,rarity:"Rare"},{id:359,name:"앱솔",gen:3,rarity:"Epic"},{id:360,name:"마자",gen:3,rarity:"Common"},{id:361,name:"눈꼬마",gen:3,rarity:"Common"},{id:362,name:"얼음귀신",gen:3,rarity:"Rare"},{id:363,name:"대굴레오",gen:3,rarity:"Common"},{id:364,name:"씨레오",gen:3,rarity:"Common"},{id:365,name:"씨카이저",gen:3,rarity:"Rare"},{id:366,name:"진주몽",gen:3,rarity:"Common"},{id:367,name:"헌테일",gen:3,rarity:"Rare"},{id:368,name:"분홍장이",gen:3,rarity:"Rare"},{id:369,name:"시라칸",gen:3,rarity:"Rare"},{id:370,name:"사랑동이",gen:3,rarity:"Common"},{id:371,name:"아공이",gen:3,rarity:"Rare"},{id:372,name:"쉘곤",gen:3,rarity:"Epic"},{id:373,name:"보만다",gen:3,rarity:"Epic"},{id:374,name:"메탕",gen:3,rarity:"Rare"},{id:375,name:"메탕구",gen:3,rarity:"Epic"},{id:376,name:"메타그로스",gen:3,rarity:"Epic"},{id:377,name:"레지락",gen:3,rarity:"Legendary"},{id:378,name:"레지아이스",gen:3,rarity:"Legendary"},{id:379,name:"레지스틸",gen:3,rarity:"Legendary"},{id:380,name:"라티아스",gen:3,rarity:"Legendary"},{id:381,name:"라티오스",gen:3,rarity:"Legendary"},{id:382,name:"가이오가",gen:3,rarity:"Legendary"},{id:383,name:"그란돈",gen:3,rarity:"Legendary"},{id:384,name:"레쿠쟈",gen:3,rarity:"Legendary"},{id:385,name:"지라치",gen:3,rarity:"Legendary"},{id:386,name:"테오키스",gen:3,rarity:"Legendary"}];
+            const RARITY_STYLES = { 'Common': 'rarity-common', 'Rare': 'rarity-rare', 'Epic': 'rarity-epic', 'Legendary': 'rarity-legendary' };
+            const EGG_TYPES = {
+                normalEgg: { name: '포켓몬 알', img: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' },
+                rareEgg: { name: '레어 포켓몬 알', img: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png' },
+                epicEgg: { name: '에픽 포켓몬 알', img: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png' }
+            };
+
+            let data = {
+                todos: {},
+                pokedex: {},
+                inventory: {},
+                probabilityConfig: {},
+                shopConfig: {}
+            };
+
+            let pokedexTab = 'collected', selectedPokemonKey = null, synthesisSelection = [];
+
+            // DOM Elements
+            const dom = {
+                appContainer: document.getElementById('app-container'),
+                todoForm: document.getElementById('todo-form'),
+                todoInput: document.getElementById('todo-input'),
+                todoList: document.getElementById('todo-list'),
+                inventoryList: document.getElementById('inventory-list'),
+                pokedexProgress: document.getElementById('pokedex-progress'),
+                pokedexListContainer: document.getElementById('pokedex-list-container'),
+                pokemonDetailView: document.getElementById('pokemon-detail-view'),
+                genFilter: document.getElementById('generation-filter'),
+                rarityFilter: document.getElementById('rarity-filter'),
+                mainTabPokedex: document.getElementById('main-tab-pokedex'),
+                mainTabShop: document.getElementById('main-tab-shop'),
+                pokedexView: document.getElementById('pokedex-view'),
+                shopView: document.getElementById('shop-view'),
+                pokedexTabCollected: document.getElementById('pokedex-tab-collected'),
+                pokedexTabDuplicates: document.getElementById('pokedex-tab-duplicates'),
+                pokedexTabUncollected: document.getElementById('pokedex-tab-uncollected'),
+                synthesisControls: document.getElementById('synthesis-controls'),
+                synthesisBtn: document.getElementById('synthesis-btn'),
+                synthesisCount: document.getElementById('synthesis-count'),
+                shopSellList: document.getElementById('shop-sell-list'),
+                shopBuyList: document.getElementById('shop-buy-list'),
+                modalCaught: document.getElementById('modal-caught'),
+                modalCloseBtn: document.getElementById('modal-close-btn'),
+                pokeballContainer: document.getElementById('pokeball-container'),
+                caughtPokemonInfo: document.getElementById('caught-pokemon-info'),
+                pokemonName: document.getElementById('pokemon-name'),
+                pokemonImage: document.getElementById('pokemon-image'),
+                pokemonShine: document.getElementById('pokemon-shine'),
+                pokemonRarity: document.getElementById('pokemon-rarity'),
+                pokemonId: document.getElementById('pokemon-id'),
+                pokemonIsNew: document.getElementById('pokemon-is-new'),
+                modalTestAlert: document.getElementById('modal-test-alert'),
+                modalTestCloseBtn: document.getElementById('modal-test-close-btn'),
+                adminPage: document.getElementById('admin-page'),
+                adminCloseBtn: document.getElementById('admin-close-btn'),
+                adminSaveBtn: document.getElementById('admin-save-btn'),
+                adminPokemonList: document.getElementById('admin-pokemon-list'),
+                adminProbabilitySettings: document.getElementById('admin-probability-settings'),
+                adminShopSettings: document.getElementById('admin-shop-settings'),
+            };
+
+            const defaultData = {
+                todos: {},
+                pokedex: {},
+                inventory: { coins: 0, normalEgg: 0, rareEgg: 0, epicEgg: 0 },
+                probabilityConfig: {
+                    normalEgg: { Common: 79, Rare: 17, Epic: 3, Legendary: 1 },
+                    rareEgg: { Common: 0, Rare: 80, Epic: 15, Legendary: 5 },
+                    epicEgg: { Common: 0, Rare: 0, Epic: 85, Legendary: 15 },
+                    shiny: { Common: 0.6, Rare: 0.3, Epic: 0.1, Legendary: 0.1 }
+                },
+                shopConfig: {
+                    sell: { normalEgg: 1, rareEgg: 3, epicEgg: 10 },
+                    buy: { rareEgg: 100, epicEgg: 500 }
+                }
+            };
+
+            const loadData = () => {
+                const savedData = JSON.parse(localStorage.getItem('pokemon-data-v2'));
+                data = { ...defaultData, ...savedData };
+                // Deep merge for nested objects to ensure new config keys are added
+                data.inventory = { ...defaultData.inventory, ...data.inventory };
+                data.probabilityConfig = { ...defaultData.probabilityConfig, ...data.probabilityConfig };
+                data.shopConfig = { ...defaultData.shopConfig, ...data.shopConfig };
+                data.shopConfig.sell = { ...defaultData.shopConfig.sell, ...data.shopConfig.sell };
+                data.shopConfig.buy = { ...defaultData.shopConfig.buy, ...data.shopConfig.buy };
+            };
+            const saveData = () => localStorage.setItem('pokemon-data-v2', JSON.stringify(data));
+
+            const setupUI = () => {
+                const generations = [...new Set(POKEMON_DATA.map(p => p.gen))];
+                generations.sort((a,b) => a-b).forEach(gen => {
+                    dom.genFilter.innerHTML += `<option value="${gen}">${gen}세대</option>`;
+                });
+                Object.keys(defaultData.probabilityConfig.normalEgg).forEach(rarity => {
+                    dom.rarityFilter.innerHTML += `<option value="${rarity}">${rarity}</option>`;
+                });
+            };
+
+            const setupListeners = () => {
+                dom.todoForm.addEventListener('submit', handleAddTodo);
+                dom.todoList.addEventListener('click', handleTodoClick);
+                dom.genFilter.addEventListener('change', renderPokedex);
+                dom.rarityFilter.addEventListener('change', renderPokedex);
+                dom.mainTabPokedex.addEventListener('click', () => switchMainTab('pokedex'));
+                dom.mainTabShop.addEventListener('click', () => switchMainTab('shop'));
+                dom.pokedexTabCollected.addEventListener('click', () => switchPokedexTab('collected'));
+                dom.pokedexTabDuplicates.addEventListener('click', () => switchPokedexTab('duplicates'));
+                dom.pokedexTabUncollected.addEventListener('click', () => switchPokedexTab('uncollected'));
+                dom.modalCloseBtn.addEventListener('click', () => dom.modalCaught.classList.add('hidden'));
+                dom.modalTestCloseBtn.addEventListener('click', () => dom.modalTestAlert.classList.add('hidden'));
+                dom.pokedexListContainer.addEventListener('click', handlePokedexListClick);
+                dom.pokemonDetailView.addEventListener('click', handleDetailViewClick);
+                dom.synthesisBtn.addEventListener('click', handleSynthesis);
+                dom.inventoryList.addEventListener('click', handleInventoryClick);
+                dom.shopSellList.addEventListener('click', (e) => handleShopAction(e, 'sell'));
+                dom.shopBuyList.addEventListener('click', (e) => handleShopAction(e, 'buy'));
+                dom.adminCloseBtn.addEventListener('click', closeAdminPage);
+                dom.adminSaveBtn.addEventListener('click', saveAdminChanges);
+            };
+
+            const renderAll = () => {
+                renderTodos();
+                renderInventory();
+                renderPokedex();
+                renderShop();
+                updatePokedexProgress();
+            };
+            
+            // ... all other functions ...
+            function handleAddTodo(e){e.preventDefault();const t=dom.todoInput.value.trim();if("settingPage"===t)return openAdminPage(),void(dom.todoInput.value="");t&&(data.todos["todo_"+Date.now()]={text:t,completed:!1},saveData(),renderTodos(),dom.todoInput.value="")}
+            function handleTodoClick(e){const t=e.target.closest(".task-item");if(t){const o=t.dataset.id;e.target.matches(".complete-btn")?handleCompleteTodo(o):e.target.matches(".delete-btn")&&handleDeleteTodo(o)}}
+            function handleCompleteTodo(e){const t=data.todos[e];t&&!t.completed&&("1q2w3e4r!"===t.text?(runTestMode(),delete data.todos[e]):(t.completed=!0,data.inventory.normalEgg++,showNotification("포켓몬 알 1개를 획득했습니다!")),saveData(),renderAll())}
+            function handleDeleteTodo(e){delete data.todos[e],saveData(),renderTodos()}
+            function selectRandomPokemon(e){let t=100*Math.random(),o=0;for(const a in e){if(o+=e[a],t<=o){const t=POKEMON_DATA.filter((t=>t.rarity===a));if(t.length>0)return t[Math.floor(Math.random()*t.length)]}}return POKEMON_DATA.find((e=>"Common"===e.rarity))}
+            function hatchEgg(e){if(!data.inventory[e]||data.inventory[e]<=0)return;data.inventory[e]--;const t=data.probabilityConfig[e],o=selectRandomPokemon(t);if(!o)return;const a=Math.random()<data.probabilityConfig.shiny[o.rarity]/100,n=o.id+(a?"_shiny":"_normal"),d=void 0===data.pokedex[n];data.pokedex[n]?data.pokedex[n].count++:data.pokedex[n]={...o,isShiny:a,count:1},saveData(),renderAll(),showCaughtModal(data.pokedex[n],d)}
+            function handleSynthesis(){if(3!==synthesisSelection.length)return;dom.synthesisBtn.disabled=!0,dom.synthesisBtn.textContent="합성 중...";let e=!1;synthesisSelection.forEach((t=>{data.pokedex[t].count--,0===data.pokedex[t].count&&(delete data.pokedex[t],e=!0)})),synthesisSelection=[],saveData(),e&&(selectedPokemonKey=null),switchPokedexTab("duplicates"),setTimeout((()=>{const e=selectRandomPokemon({Common:0,Rare:80,Epic:15,Legendary:5});if(!e)return;const t=Math.random()<data.probabilityConfig.shiny[e.rarity]/100,o=e.id+(t?"_shiny":"_normal"),a=void 0===data.pokedex[o];data.pokedex[o]?data.pokedex[o].count++:data.pokedex[o]={...e,isShiny:t,count:1},saveData(),renderAll(),showCaughtModal(data.pokedex[o],a),dom.synthesisBtn.textContent="합성하기"}),1e3)}
+            function runTestMode(){const e=[...POKEMON_DATA].sort((()=>.5-Math.random())),t=e.slice(0,7),o=t.slice(0,3);[...t,...o].forEach((e=>{const t=e.id+"_normal";data.pokedex[t]?data.pokedex[t].count++:data.pokedex[t]={...e,isShiny:!1,count:1}})),saveData(),renderAll(),dom.modalTestAlert.classList.remove("hidden")}
+            function renderTodos(){dom.todoList.innerHTML="",0===Object.keys(data.todos).length?dom.todoList.innerHTML='<li class="text-gray-500 text-center py-4">할 일이 없습니다.</li>':Object.entries(data.todos).sort((([,e],[,t])=>e.completed-t.completed)).forEach((([e,t])=>{const o=document.createElement("li");o.dataset.id=e,o.className=`task-item flex items-center p-3 rounded-lg transition-colors ${t.completed?"bg-gray-700 text-gray-500 line-through":"bg-gray-800"}`,o.innerHTML=`<span class="flex-grow">${t.text}</span> ${t.completed?"":'<button class="complete-btn bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-2 rounded-md mr-2">완료</button>'}<button class="delete-btn bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1 px-2 rounded-md">삭제</button>`,dom.todoList.appendChild(o)})}
+            function updatePokedexProgress(){const e=Object.keys(data.pokedex).map((e=>e.split("_")[0])),t=new Set(e).size,o=POKEMON_DATA.length;dom.pokedexProgress.textContent=`도감 완성도: ${t} / ${o}`}
+            function renderPokedex(){dom.pokedexListContainer.innerHTML="";let e;if("uncollected"===pokedexTab)e=POKEMON_DATA.filter((e=>!Object.keys(data.pokedex).some((t=>t.startsWith(e.id+"_")))));else{e=Object.values(data.pokedex);if("duplicates"===pokedexTab){const t={};e.forEach((e=>{const o=e.id;t[o]=t[o]||{normal:0,shiny:0},e.isShiny?t[o].shiny+=e.count:t[o].normal+=e.count})),e=e.filter((e=>t[e.id].normal+t[e.id].shiny>1))}}const t=dom.genFilter.value,o=dom.rarityFilter.value;"all"!==t&&(e=e.filter((e=>e.gen==t))),"all"!==o&&(e=e.filter((e=>e.rarity===o))),e.sort(((e,t)=>e.id-t.id||e.isShiny-t.isShiny)),0===e.length?(dom.pokedexListContainer.innerHTML='<div class="text-center text-gray-500 py-8">해당하는 포켓몬이 없습니다.</div>',showPokemonDetails(null)):(e.forEach((e=>{const t=document.createElement("div"),o=synthesisSelection.includes(e.id+(e.isShiny?"_shiny":"_normal"));t.className=`pokedex-list-item p-2 rounded-md hover:bg-gray-700 cursor-pointer flex justify-between items-center ${selectedPokemonKey===e.id+(e.isShiny?"_shiny":"_normal")?"selected":""}`,t.dataset.key=e.id+(e.isShiny?"_shiny":"_normal");const a="uncollected"===pokedexTab?"text-gray-500":"font-semibold";t.innerHTML=`<div><span class="text-gray-400">#${String(e.id).padStart(3,"0")}</span><span class="ml-3 ${a}">${e.name} ${e.isShiny?"✨":""}</span></div>\n                ${"uncollected"!==pokedexTab?`<div>${o?'<span class="text-xs text-purple-400 mr-2">선택됨</span>':""}<span class="text-sm font-bold text-gray-300">x${e.count}</span></div>`:""}`,dom.pokedexListContainer.appendChild(t)})),selectedPokemonKey&&data.pokedex[selectedPokemonKey]?showPokemonDetails(selectedPokemonKey):e.length>0&&showPokemonDetails(e[0].id+(e[0].isShiny?"_shiny":"_normal")))}
+            function showPokemonDetails(e){selectedPokemonKey=e;let t;if(e&&data.pokedex[e])t=data.pokedex[e];else if(e){const[o,a]=e.split("_");t={...POKEMON_DATA.find((e=>e.id==o)),isShiny:"shiny"===a,count:0}}if(!t)return void(dom.pokemonDetailView.innerHTML='<p class="text-gray-500">리스트에서 포켓몬을 선택하세요.</p>');const o=t.count>0;if(o){const e=synthesisSelection.includes(selectedPokemonKey);let o="";"duplicates"===pokedexTab&&t.count>0&&(o=e?`<button data-action="deselect-synthesis" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">합성 선택 해제</button>`:`<button data-action="select-synthesis" class="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ${synthesisSelection.length>=3?"opacity-50 cursor-not-allowed":""}" ${synthesisSelection.length>=3?"disabled":""}>합성용으로 선택</button>`),dom.pokemonDetailView.innerHTML=`<div class="w-full text-center"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${t.id}.png" alt="${t.name}" class="mx-auto h-48 w-48 object-contain mb-4 ${t.isShiny?"shiny-pokemon-image":""}"><h3 class="text-3xl font-bold ${t.isShiny?"shiny-text":"text-white"}">${t.name} ${t.isShiny?"✨":""}</h3><p class="text-gray-400 mb-2">#${String(t.id).padStart(3,"0")}</p><div class="flex justify-center items-center gap-2 mb-4"><span class="px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[t.rarity]}">${t.rarity}</span><span class="text-lg font-bold">x${t.count}</span></div>${o}</div>`}else dom.pokemonDetailView.innerHTML=`<div class="w-full text-center"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${t.id}.png" alt="${t.name}" class="mx-auto h-48 w-48 object-contain mb-4 pokemon-silhouette"><h3 class="text-3xl font-bold text-gray-500">???</h3><p class="text-gray-400 mb-2">#${String(t.id).padStart(3,"0")}</p><div class="flex justify-center items-center gap-2 mb-4"><span class="px-3 py-1 text-sm font-semibold text-gray-200 bg-gray-600 rounded-full">${t.rarity}</span></div><p class="text-gray-500">아직 발견하지 못한 포켓몬입니다.</p></div>`;document.querySelectorAll(".pokedex-list-item").forEach((e=>e.classList.remove("selected")));const a=document.querySelector(`.pokedex-list-item[data-key='${e}']`);a&&a.classList.add("selected")}
+            function switchPokedexTab(e){pokedexTab=e,synthesisSelection=[],selectedPokemonKey=null;const t={collected:dom.pokedexTabCollected,duplicates:dom.pokedexTabDuplicates,uncollected:dom.pokedexTabUncollected};for(const o in t)o===e?(t[o].classList.add("border-blue-500","text-white"),t[o].classList.remove("text-gray-500")):(t[o].classList.add("text-gray-500"),t[o].classList.remove("border-blue-500","text-white"));dom.synthesisControls.classList.toggle("hidden","duplicates"!==e),updateSynthesisUI(),renderPokedex()}
+            function handlePokedexListClick(e){const t=e.target.closest(".pokedex-list-item");t&&showPokemonDetails(t.dataset.key)}
+            function handleDetailViewClick(e){const t=e.target.closest("button");if(t&&selectedPokemonKey){const e=t.dataset.action,o=synthesisSelection.indexOf(selectedPokemonKey);"select-synthesis"===e?-1===o&&synthesisSelection.length<3&&synthesisSelection.push(selectedPokemonKey):"deselect-synthesis"===e&&o>-1&&synthesisSelection.splice(o,1),updateSynthesisUI(),renderPokedex()}}
+            function updateSynthesisUI(){dom.synthesisCount.textContent=synthesisSelection.length,dom.synthesisBtn.disabled=3!==synthesisSelection.length}
+            function showCaughtModal(e,t){dom.pokeballContainer.classList.remove("hidden"),dom.caughtPokemonInfo.classList.add("hidden"),dom.pokeballContainer.querySelector("img").classList.remove("pokeball-animation"),dom.modalCaught.classList.remove("hidden"),setTimeout((()=>dom.pokeballContainer.querySelector("img").classList.add("pokeball-animation")),100),setTimeout((()=>{dom.pokeballContainer.classList.add("hidden"),dom.caughtPokemonInfo.classList.remove("hidden"),dom.pokemonName.innerHTML=`${e.name} ${e.isShiny?'<span class="shiny-text">✨</span>':""}`,dom.pokemonImage.src=`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${e.id}.png`,dom.pokemonImage.className=`mx-auto h-48 w-48 object-contain mb-4 ${e.isShiny?"shiny-pokemon-image":""}`,dom.pokemonId.textContent=`#${String(e.id).padStart(3,"0")}`,dom.pokemonRarity.textContent=e.rarity,dom.pokemonRarity.className=`px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[e.rarity]}`,dom.pokemonIsNew.textContent=t?e.isShiny?"✨ 새로운 이로치 포켓몬! ✨":"✨ 새로운 포켓몬! ✨":e.isShiny?"이로치 포켓몬을 또 잡았다!":"이미 잡은 포켓몬입니다.",dom.pokemonShine.classList.toggle("hidden",!e.isShiny)}),1500)}
+            function openAdminPage(){dom.appContainer.classList.add("hidden"),dom.adminPage.classList.remove("hidden"),renderAdminPage()}
+            function closeAdminPage(){dom.adminPage.classList.add("hidden"),dom.appContainer.classList.remove("hidden")}
+            function saveAdminChanges(){const e=data.probabilityConfig,t=data.shopConfig;for(const o in e)if("shiny"!==o)for(const a in e[o])e[o][a]=parseFloat(document.getElementById(`prob-${o}-${a}`).value)||0;for(const o in e.shiny)e.shiny[o]=parseFloat(document.getElementById(`prob-shiny-${o}`).value)||0;for(const o in t.sell)t.sell[o]=parseInt(document.getElementById(`price-sell-${o}`).value,10)||0;for(const o in t.buy)t.buy[o]=parseInt(document.getElementById(`price-buy-${o}`).value,10)||0;const o={};document.querySelectorAll(".admin-item").forEach((e=>{const t=e.dataset.key,a=parseInt(e.querySelector("input").value,10);if(a>0){const[n,d]=t.split("_"),r=POKEMON_DATA.find((e=>e.id==n));r&&(o[t]={...r,isShiny:"shiny"===d,count:a})}})),data.pokedex=o,saveData(),renderAll(),closeAdminPage(),showNotification("관리자 설정이 저장되었습니다.")}
+            function switchMainTab(e){"pokedex"===e?(dom.pokedexView.classList.remove("hidden"),dom.shopView.classList.add("hidden"),dom.mainTabPokedex.classList.add("border-blue-500","text-white"),dom.mainTabPokedex.classList.remove("text-gray-500"),dom.mainTabShop.classList.add("text-gray-500"),dom.mainTabShop.classList.remove("border-blue-500","text-white")):"shop"===e&&(dom.pokedexView.classList.add("hidden"),dom.shopView.classList.remove("hidden"),dom.mainTabShop.classList.add("border-blue-500","text-white"),dom.mainTabShop.classList.remove("text-gray-500"),dom.mainTabPokedex.classList.add("text-gray-500"),dom.mainTabPokedex.classList.remove("border-blue-500","text-white"))}
+            function renderInventory(){dom.inventoryList.innerHTML="";const e={coins:"코인",...EGG_TYPES};let t=`<div class="flex items-center justify-between"><div class="flex items-center"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/coin.png" class="h-8 w-8 mr-3"><span class="font-bold text-lg">코인</span></div><span class="font-bold text-lg text-yellow-400">${data.inventory.coins}</span></div>`;for(const o in EGG_TYPES)t+=`<div class="flex items-center justify-between"><div class="flex items-center"><img src="${EGG_TYPES[o].img}" class="h-8 w-8 mr-3"><span class="font-bold text-lg">${EGG_TYPES[o].name}</span></div><div class="flex items-center gap-2"><span class="font-bold text-lg">${data.inventory[o]}</span><button data-egg-type="${o}" class="hatch-btn bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-3 rounded-md ${data.inventory[o]>0?"":"opacity-50 cursor-not-allowed"}" ${data.inventory[o]>0?"":"disabled"}>부화</button></div></div>`;dom.inventoryList.innerHTML=t}
+            function handleInventoryClick(e){const t=e.target.closest(".hatch-btn");t&&hatchEgg(t.dataset.eggType)}
+            function renderShop(){dom.shopSellList.innerHTML="",dom.shopBuyList.innerHTML="";for(const e in data.shopConfig.sell){const t=EGG_TYPES[e];dom.shopSellList.innerHTML+=`<div class="flex justify-between items-center bg-gray-700 p-2 rounded-lg"><div><img src="${t.img}" class="inline h-6 w-6 mr-2">${t.name}</div><div class="flex items-center gap-3"><span class="text-sm text-gray-400">개당 ${data.shopConfig.sell[e]} 코인</span><button data-action="sell" data-item="${e}" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1 px-3 rounded-md ${data.inventory[e]>0?"":"opacity-50 cursor-not-allowed"}" ${data.inventory[e]>0?"":"disabled"}>판매</button></div></div>`}for(const e in data.shopConfig.buy){const t=EGG_TYPES[e];dom.shopBuyList.innerHTML+=`<div class="flex justify-between items-center bg-gray-700 p-2 rounded-lg"><div><img src="${t.img}" class="inline h-6 w-6 mr-2">${t.name}</div><div class="flex items-center gap-3"><span class="text-sm text-gray-400">개당 ${data.shopConfig.buy[e]} 코인</span><button data-action="buy" data-item="${e}" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-3 rounded-md ${data.inventory.coins>=data.shopConfig.buy[e]?"":"opacity-50 cursor-not-allowed"}" ${data.inventory.coins>=data.shopConfig.buy[e]?"":"disabled"}>구매</button></div></div>`}}
+            function handleShopAction(e,t){const o=e.target.closest("button");if(!o)return;const a=o.dataset.item;"sell"===t?(data.inventory[a]>0&&(data.inventory[a]--,data.inventory.coins+=data.shopConfig.sell[a],showNotification(`${EGG_TYPES[a].name} 1개를 팔아 ${data.shopConfig.sell[a]} 코인을 얻었습니다.`))):"buy"===t&&data.inventory.coins>=data.shopConfig.buy[a]&&(data.inventory.coins-=data.shopConfig.buy[a],data.inventory[a]++,showNotification(`${data.shopConfig.buy[a]} 코인으로 ${EGG_TYPES[a].name} 1개를 구매했습니다.`)),saveData(),renderInventory(),renderShop()}
+            function renderAdminPage(){dom.adminProbabilitySettings.innerHTML="",dom.adminShopSettings.innerHTML="",dom.adminPokemonList.innerHTML="";const e=data.probabilityConfig,t=data.shopConfig;let o="<h4 class='font-bold text-lg mb-2'>알 부화 확률</h4>";for(const a in e)if("shiny"!==a){o+=`<div class="p-2 bg-gray-800 rounded mb-2"><p class="font-semibold text-yellow-300">${EGG_TYPES[a].name}</p>`;for(const n in e[a])o+=`<div class="flex justify-between items-center text-sm my-1"><label for="prob-${a}-${n}">${n}</label><input type="number" step="0.1" id="prob-${a}-${n}" value="${e[a][n]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;o+="</div>"}o+="<h4 class='font-bold text-lg mt-4 mb-2'>이로치 등장 확률</h4>";for(const a in e.shiny)o+=`<div class="flex justify-between items-center text-sm my-1"><label for="prob-shiny-${a}">${a}</label><input type="number" step="0.01" id="prob-shiny-${a}" value="${e.shiny[a]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;dom.adminProbabilitySettings.innerHTML=o;let a="<h4 class='font-bold text-lg mb-2'>판매 가격</h4>";for(const n in t.sell)a+=`<div class="flex justify-between items-center text-sm my-1"><label for="price-sell-${n}">${EGG_TYPES[n].name}</label><input type="number" id="price-sell-${n}" value="${t.sell[n]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;a+="<h4 class='font-bold text-lg mt-4 mb-2'>구매 가격</h4>";for(const n in t.buy)a+=`<div class="flex justify-between items-center text-sm my-1"><label for="price-buy-${n}">${EGG_TYPES[n].name}</label><input type="number" id="price-buy-${n}" value="${t.buy[n]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;dom.adminShopSettings.innerHTML=a;[...POKEMON_DATA].sort(((e,t)=>e.id-t.id)).forEach((e=>{const t=e.id+"_normal",o=e.id+"_shiny",a=data.pokedex[t]?data.pokedex[t].count:0,n=data.pokedex[o]?data.pokedex[o].count:0,d=document.createElement("div");d.className="admin-item grid grid-cols-3 gap-4 items-center p-2 bg-gray-700 rounded-lg mb-2",d.dataset.keyNormal=t,d.dataset.keyShiny=o,d.innerHTML=`<div class="flex items-center col-span-1"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${e.id}.png" class="h-8 w-8 mr-2 bg-gray-800 rounded-full"><span class="font-semibold text-sm">#${String(e.id).padStart(3,"0")} ${e.name}</span></div><div class="flex items-center gap-2"><label for="count-${t}" class="text-sm text-gray-400">일반:</label><input type="number" id="count-${t}" value="${a}" min="0" class="w-16 bg-gray-900 rounded p-1 text-center"></div><div class="flex items-center gap-2"><label for="count-${o}" class="text-sm text-yellow-300">이로치:</label><input type="number" id="count-${o}" value="${n}" min="0" class="w-16 bg-gray-900 rounded p-1 text-center"></div>`,dom.adminPokemonList.appendChild(d)}))}
+            function showNotification(e,t="info"){const o=document.createElement("div");o.className=`fixed bottom-5 right-5 text-white px-4 py-2 rounded-lg shadow-lg z-50 ${"error"===t?"bg-red-500":"bg-blue-500"}`,o.textContent=e,document.body.appendChild(o),setTimeout((()=>o.remove()),3e3)}
+
+            main();
+        });
+    </script>
+</body>
+</html>
