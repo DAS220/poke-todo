@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>포켓몬 To-Do 리스트</title>
+    <title>포켓몬 To-Do 리스트 (오프라인 최종판)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -96,15 +96,25 @@
             </header>
             <div class="flex-grow p-4 overflow-y-auto">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- 확률 설정 -->
+                    <!-- 뽑기 확률 설정 -->
                     <section>
-                        <h3 class="text-xl font-bold mb-2 text-green-400">뽑기 확률 설정 (%)</h3>
+                        <h3 class="text-xl font-bold mb-2 text-green-400">알 부화 확률 설정 (%)</h3>
                         <div id="admin-probability-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
                     </section>
-                     <!-- 상점 설정 -->
+                     <!-- 상점 가격 설정 -->
                     <section>
                         <h3 class="text-xl font-bold mb-2 text-blue-400">상점 가격 설정 (코인)</h3>
                         <div id="admin-shop-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                    </section>
+                     <!-- 할 일 보상 설정 -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-2 text-yellow-400">할 일 보상 설정</h3>
+                        <div id="admin-reward-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                    </section>
+                    <!-- 인벤토리 편집 -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-2 text-cyan-400">인벤토리 편집</h3>
+                        <div id="admin-inventory-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
                     </section>
                 </div>
                  <!-- 포켓몬 보유량 편집 -->
