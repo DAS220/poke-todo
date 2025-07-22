@@ -407,7 +407,7 @@ function renderInventory() {
     dom.inventoryList.innerHTML = "";
     let inventoryHTML = `
         <div class="flex items-center justify-between">
-            <div class="flex items-center"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/coin.png" class="h-8 w-8 mr-3"><span class="font-bold text-lg">코인</span></div>
+            <span class="font-bold text-lg">코인</span></div>
             <span class="font-bold text-lg text-yellow-400">${data.inventory.coins}</span>
         </div>`;
     
