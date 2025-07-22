@@ -89,7 +89,7 @@ const defaultData = {
     // 상점 설정
     shopConfig: {
         sell: { normalEgg: 1, rareEgg: 3, epicEgg: 10 },
-        buy: { rareEgg: 100, epicEgg: 500 }
+        buy: { rareEgg: 30, epicEgg: 100 }
     }
 };
 
