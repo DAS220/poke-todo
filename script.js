@@ -7,12 +7,11 @@ const EGG_TYPES = {
     epicEgg: { name: '에픽 포켓몬 알', img: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png' }
 };
 
-let data = {}; // 앱의 모든 상태를 저장하는 객체
-let pokedexTab = 'collected'; // 현재 활성화된 도감 탭
-let selectedPokemonKey = null; // 도감에서 선택된 포켓몬의 키
-let synthesisSelection = []; // 합성을 위해 선택된 포켓몬 배열
+let data = {};
+let pokedexTab = 'collected';
+let selectedPokemonKey = null;
+let synthesisSelection = [];
 
-// --- DOM 요소 캐싱 ---
 const dom = {
     appContainer: document.getElementById('app-container'),
     todoForm: document.getElementById('todo-form'),
@@ -61,7 +60,6 @@ const dom = {
     adminAddDailyTodoBtn: document.getElementById('admin-add-daily-todo-btn'),
 };
 
-// --- 데이터 관리 ---
 const defaultData = {
     todos: {},
     pokedex: {},
@@ -70,10 +68,10 @@ const defaultData = {
         normalEgg: 0,
         rareEgg: 0,
         epicEgg: 0,
-        pityCount: 0 // 천장 시스템 카운터
+        pityCount: 0
     },
-    dailyTodos: ["구몬하기", "책읽기", "듀오링고하기"], // 고정 할 일 목록
-    lastLoginDate: null, // 마지막 접속일 확인용
+    dailyTodos: ["구몬하기", "책읽기", "듀오링고하기"],
+    lastLoginDate: null,
     rewardProbabilities: {
         epic: 1,
         rare: 4,
@@ -94,7 +92,27 @@ const defaultData = {
     }
 };
 
-// --- 데이터 로드 및 초기화 ---
+function deepMerge(target, source) {
+    const output = { ...target };
+    if (isObject(target) && isObject(source)) {
+        Object.keys(source).forEach(key => {
+            if (isObject(source[key])) {
+                if (!(key in target))
+                    Object.assign(output, { [key]: source[key] });
+                else
+                    output[key] = deepMerge(target[key], source[key]);
+            } else {
+                Object.assign(output, { [key]: source[key] });
+            }
+        });
+    }
+    return output;
+}
+
+function isObject(item) {
+    return (item && typeof item === 'object' && !Array.isArray(item));
+}
+
 const loadData = () => {
     const savedData = JSON.parse(localStorage.getItem('pokemon-data-v4'));
     data = deepMerge(defaultData, savedData || {});
@@ -105,18 +123,15 @@ const saveData = () => {
     localStorage.setItem('pokemon-data-v4', JSON.stringify(data));
 };
 
-// --- 날짜 확인 및 고정 할 일 초기화 ---
 function checkDateAndResetDailies() {
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD 형식
+    const today = new Date().toISOString().slice(0, 10);
     if (data.lastLoginDate !== today) {
-        // 날짜가 다르면 고정 할 일 초기화
         Object.keys(data.todos).forEach(key => {
             if (data.todos[key].isDaily) {
                 data.todos[key].completed = false;
             }
         });
-
-        // 마스터 목록에 있는 고정 할 일이 현재 목록에 없으면 추가
+        
         data.dailyTodos.forEach((dailyText, index) => {
             const dailyId = `daily_${index}`;
             if (!data.todos[dailyId]) {
@@ -133,7 +148,6 @@ function checkDateAndResetDailies() {
     }
 }
 
-// --- 초기 설정 ---
 const setupUI = () => {
     const generations = [...new Set(POKEMON_DATA.map(p => p.gen))];
     generations.sort((a, b) => a - b).forEach(gen => {
@@ -165,10 +179,9 @@ const setupListeners = () => {
     dom.adminCloseBtn.addEventListener('click', closeAdminPage);
     dom.adminSaveBtn.addEventListener('click', saveAdminChanges);
     dom.adminAddDailyTodoBtn.addEventListener('click', handleAdminAddDailyTodo);
-    dom.adminDailyTodoSettings.addEventListener('click', handleAdminRemoveDailyTodo);
+    dom.adminDailyTodoSettings.addEventListener('click', handleAdminEditOrRemoveDailyTodo);
 };
 
-// --- 렌더링 함수 ---
 const renderAll = () => {
     renderTodos();
     renderInventory();
@@ -176,8 +189,6 @@ const renderAll = () => {
     renderShop();
     updatePokedexProgress();
 };
-
-// --- 이벤트 핸들러 및 로직 ---
 
 function handleAddTodo(event) {
     event.preventDefault();
@@ -240,7 +251,7 @@ function handleCompleteTodo(todoId) {
                 receivedEggName = EGG_TYPES.normalEgg.name;
                 data.inventory.pityCount++;
             }
-            const remainingForPity = pityThreshold - data.inventory.pityCount;
+            const remainingForPity = pityThreshold - (data.inventory.pityCount || 0);
             notificationMessage = `${receivedEggName} 1개를 획득했습니다! (천장까지 ${remainingForPity}개)`;
         }
         showNotification(notificationMessage);
@@ -259,6 +270,33 @@ function handleDeleteTodo(todoId) {
     }
 }
 
+function runTestMode() {
+    // 3종의 중복 포켓몬 추가
+    const shuffled = [...POKEMON_DATA].sort(() => 0.5 - Math.random());
+    const testPokemon = shuffled.slice(0, 3);
+    testPokemon.forEach(pokemon => {
+        const pokemonKey = `${pokemon.id}_normal`;
+        if (data.pokedex[pokemonKey]) {
+            data.pokedex[pokemonKey].count += 2;
+        } else {
+            data.pokedex[pokemonKey] = { ...pokemon, isShiny: false, count: 2 };
+        }
+    });
+
+    // 종류별 알 1개씩 추가
+    data.inventory.normalEgg++;
+    data.inventory.rareEgg++;
+    data.inventory.epicEgg++;
+
+    saveData();
+    renderAll();
+    // 모달 내용 변경
+    const modal = document.getElementById('modal-test-alert');
+    modal.querySelector('h2').textContent = '테스트 모드 활성화';
+    modal.querySelector('p').innerHTML = '중복 포켓몬 3종 (각 2마리)과<br>알 3종 (각 1개)이 추가되었습니다.';
+    modal.classList.remove("hidden");
+}
+
 function renderTodos() {
     dom.todoList.innerHTML = "";
     const todos = Object.entries(data.todos);
@@ -266,7 +304,7 @@ function renderTodos() {
         dom.todoList.innerHTML = '<li class="text-gray-500 text-center py-4">할 일이 없습니다.</li>';
         return;
     }
-    todos.sort(([, a], [, b]) => (a.isDaily === b.isDaily) ? (a.completed - b.completed) : (b.isDaily - a.isDaily))
+    todos.sort(([, a], [, b]) => (a.isDaily === b.isDaily) ? (a.completed - b.completed) : (b.isDaily ? -1 : 1))
          .forEach(([id, todo]) => {
             const li = document.createElement("li");
             li.dataset.id = id;
@@ -287,7 +325,7 @@ function renderInventory() {
     let inventoryHTML = `
         <div class="flex items-center justify-between">
             <div class="flex items-center">
-                <img src="https://i.imgur.com/3bi9vF8.png" class="h-8 w-8 mr-3" alt="코인" style="image-rendering: pixelated;">
+                <img src="https://i.imgur.com/sSddy3V.png" class="h-8 w-8 mr-3" alt="코인" style="image-rendering: pixelated;">
                 <span class="font-bold text-lg">코인</span>
             </div>
             <span class="font-bold text-lg text-yellow-400">${data.inventory.coins}</span>
@@ -295,20 +333,26 @@ function renderInventory() {
     for (const eggType in EGG_TYPES) {
         const eggInfo = EGG_TYPES[eggType];
         const count = data.inventory[eggType] || 0;
-        const disabled = count > 0 ? "" : "opacity-50 cursor-not-allowed";
+        const disabled = count <= 0;
         inventoryHTML += `
             <div class="flex items-center justify-between">
                 <div class="flex items-center"><img src="${eggInfo.img}" class="h-8 w-8 mr-3"><span class="font-bold text-lg">${eggInfo.name}</span></div>
                 <div class="flex items-center gap-2">
                     <span class="font-bold text-lg">${count}</span>
-                    <button data-egg-type="${eggType}" class="hatch-btn bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-3 rounded-md ${disabled}" ${count > 0 ? "" : "disabled"}>부화</button>
+                    <button data-egg-type="${eggType}" class="hatch-btn bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-3 rounded-md ${disabled ? "opacity-50 cursor-not-allowed" : ""}" ${disabled ? "disabled" : ""}>부화</button>
                 </div>
             </div>`;
     }
     dom.inventoryList.innerHTML = inventoryHTML;
 }
 
-// --- 관리자 페이지 로직 ---
+function handleInventoryClick(event) {
+    const hatchButton = event.target.closest(".hatch-btn");
+    if (hatchButton && !hatchButton.disabled) {
+        hatchEgg(hatchButton.dataset.eggType);
+    }
+}
+
 function openAdminPage() {
     dom.appContainer.classList.add('hidden');
     dom.adminPage.classList.remove('hidden');
@@ -321,15 +365,13 @@ function closeAdminPage() {
 }
 
 function renderAdminPage() {
-    // 고정 할 일 렌더링
     dom.adminDailyTodoSettings.innerHTML = data.dailyTodos.map((todo, index) => `
         <div class="flex items-center gap-2">
             <input type="text" value="${todo}" data-index="${index}" class="admin-daily-todo-item flex-grow bg-gray-700 text-white rounded-lg px-3 py-1">
             <button data-index="${index}" class="admin-remove-daily-todo-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-lg">-</button>
         </div>
     `).join('');
-
-    // 인벤토리 렌더링
+    
     let inventoryHTML = `<h4 class='font-bold text-lg mb-2'>아이템 수량</h4>`;
     inventoryHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="inv-edit-coins">코인</label><input type="number" id="inv-edit-coins" value="${data.inventory.coins}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
     for (const eggType in EGG_TYPES) {
@@ -337,8 +379,24 @@ function renderAdminPage() {
     }
     dom.adminInventorySettings.innerHTML = inventoryHTML;
 
-    // 나머지 설정들 렌더링 (이하 생략, 기존 코드와 동일)
-    // ... (기존 renderAdminPage의 나머지 로직)
+    let rewardHTML = `<h4 class='font-bold text-lg mb-2'>알 획득 확률 (%)</h4>`;
+    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="prob-reward-normal">포켓몬 알</label><input type="number" step="0.1" id="prob-reward-normal" value="${data.rewardProbabilities.normal}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
+    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="prob-reward-rare">레어 포켓몬 알</label><input type="number" step="0.1" id="prob-reward-rare" value="${data.rewardProbabilities.rare}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
+    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="prob-reward-epic">에픽 포켓몬 알</label><input type="number" step="0.1" id="prob-reward-epic" value="${data.rewardProbabilities.epic}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
+    rewardHTML += `<h4 class='font-bold text-lg mt-4 mb-2'>천장 시스템</h4>`;
+    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="pity-threshold">천장 횟수 (일반 알 연속)</label><input type="number" id="pity-threshold" value="${data.pitySystemConfig.threshold}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
+    dom.adminRewardSettings.innerHTML = rewardHTML;
+
+    let shopHTML = "<h4 class='font-bold text-lg mb-2'>판매 가격</h4>";
+    for (const item in data.shopConfig.sell) {
+        shopHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="price-sell-${item}">${EGG_TYPES[item].name}</label><input type="number" id="price-sell-${item}" value="${data.shopConfig.sell[item]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
+    }
+    shopHTML += "<h4 class='font-bold text-lg mt-4 mb-2'>구매 가격</h4>";
+    for (const item in data.shopConfig.buy) {
+        shopHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="price-buy-${item}">${EGG_TYPES[item].name}</label><input type="number" id="price-buy-${item}" value="${data.shopConfig.buy[item]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
+    }
+    dom.adminShopSettings.innerHTML = shopHTML;
+    
     let probHTML = "<h4 class='font-bold text-lg mb-2'>알 부화 확률</h4>";
     for (const eggType in data.probabilityConfig) {
         if (eggType === 'shiny') continue;
@@ -353,24 +411,6 @@ function renderAdminPage() {
         probHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="prob-shiny-${rarity}">${rarity}</label><input type="number" step="0.01" id="prob-shiny-${rarity}" value="${data.probabilityConfig.shiny[rarity]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
     }
     dom.adminProbabilitySettings.innerHTML = probHTML;
-
-    let shopHTML = "<h4 class='font-bold text-lg mb-2'>판매 가격</h4>";
-    for (const item in data.shopConfig.sell) {
-        shopHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="price-sell-${item}">${EGG_TYPES[item].name}</label><input type="number" id="price-sell-${item}" value="${data.shopConfig.sell[item]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
-    }
-    shopHTML += "<h4 class='font-bold text-lg mt-4 mb-2'>구매 가격</h4>";
-    for (const item in data.shopConfig.buy) {
-        shopHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="price-buy-${item}">${EGG_TYPES[item].name}</label><input type="number" id="price-buy-${item}" value="${data.shopConfig.buy[item]}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
-    }
-    dom.adminShopSettings.innerHTML = shopHTML;
-    
-    let rewardHTML = `<h4 class='font-bold text-lg mb-2'>알 획득 확률 (%)</h4>`;
-    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="prob-reward-normal">포켓몬 알</label><input type="number" step="0.1" id="prob-reward-normal" value="${data.rewardProbabilities.normal}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
-    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="prob-reward-rare">레어 포켓몬 알</label><input type="number" step="0.1" id="prob-reward-rare" value="${data.rewardProbabilities.rare}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
-    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="prob-reward-epic">에픽 포켓몬 알</label><input type="number" step="0.1" id="prob-reward-epic" value="${data.rewardProbabilities.epic}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
-    rewardHTML += `<h4 class='font-bold text-lg mt-4 mb-2'>천장 시스템</h4>`;
-    rewardHTML += `<div class="flex justify-between items-center text-sm my-1"><label for="pity-threshold">천장 횟수 (일반 알 연속)</label><input type="number" id="pity-threshold" value="${data.pitySystemConfig.threshold}" class="w-20 bg-gray-700 rounded p-1 text-center"></div>`;
-    dom.adminRewardSettings.innerHTML = rewardHTML;
 
     dom.adminPokemonList.innerHTML = "";
     [...POKEMON_DATA].sort((a,b) => a.id - b.id).forEach(pokemon => {
@@ -390,28 +430,25 @@ function handleAdminAddDailyTodo() {
     if (newTodoText) {
         data.dailyTodos.push(newTodoText);
         dom.adminNewDailyTodoInput.value = '';
-        renderAdminPage(); // 리스트 다시 렌더링
+        renderAdminPage();
     }
 }
 
-function handleAdminRemoveDailyTodo(event) {
+function handleAdminEditOrRemoveDailyTodo(event) {
     if (event.target.matches('.admin-remove-daily-todo-btn')) {
         const indexToRemove = parseInt(event.target.dataset.index, 10);
         data.dailyTodos.splice(indexToRemove, 1);
-        renderAdminPage(); // 리스트 다시 렌더링
+        renderAdminPage();
     }
 }
 
 function saveAdminChanges() {
-    // 고정 할 일 저장
     const newDailyTodos = [];
     document.querySelectorAll('.admin-daily-todo-item').forEach(input => {
         const text = input.value.trim();
         if (text) newDailyTodos.push(text);
     });
     data.dailyTodos = newDailyTodos;
-
-    // 기존 할 일 목록에서 고정 할 일 업데이트/제거
     const currentDailyIds = data.dailyTodos.map((_, index) => `daily_${index}`);
     Object.keys(data.todos).forEach(key => {
         if (data.todos[key].isDaily && !currentDailyIds.includes(key)) {
@@ -427,17 +464,11 @@ function saveAdminChanges() {
         }
     });
 
-    // 나머지 설정 저장 (이하 생략, 기존 코드와 동일)
-    // ... (기존 saveAdminChanges의 나머지 로직)
     for (const eggType in data.probabilityConfig) {
         if (eggType === 'shiny') {
-            for (const rarity in data.probabilityConfig.shiny) {
-                data.probabilityConfig.shiny[rarity] = parseFloat(document.getElementById(`prob-shiny-${rarity}`).value) || 0;
-            }
+            for (const rarity in data.probabilityConfig.shiny) data.probabilityConfig.shiny[rarity] = parseFloat(document.getElementById(`prob-shiny-${rarity}`).value) || 0;
         } else {
-            for (const rarity in data.probabilityConfig[eggType]) {
-                data.probabilityConfig[eggType][rarity] = parseFloat(document.getElementById(`prob-${eggType}-${rarity}`).value) || 0;
-            }
+            for (const rarity in data.probabilityConfig[eggType]) data.probabilityConfig[eggType][rarity] = parseFloat(document.getElementById(`prob-${eggType}-${rarity}`).value) || 0;
         }
     }
     for (const item in data.shopConfig.sell) data.shopConfig.sell[item] = parseInt(document.getElementById(`price-sell-${item}`).value, 10) || 0;
@@ -447,9 +478,7 @@ function saveAdminChanges() {
     data.rewardProbabilities.epic = parseFloat(document.getElementById('prob-reward-epic').value) || 0;
     data.pitySystemConfig.threshold = parseInt(document.getElementById('pity-threshold').value, 10) || 30;
     data.inventory.coins = parseInt(document.getElementById('inv-edit-coins').value, 10) || 0;
-    for (const eggType in EGG_TYPES) {
-        data.inventory[eggType] = parseInt(document.getElementById(`inv-edit-${eggType}`).value, 10) || 0;
-    }
+    for (const eggType in EGG_TYPES) data.inventory[eggType] = parseInt(document.getElementById(`inv-edit-${eggType}`).value, 10) || 0;
     const newPokedex = {};
     document.querySelectorAll(".admin-item").forEach(item => {
         const keyNormal = item.dataset.keyNormal, keyShiny = item.dataset.keyShiny;
@@ -465,14 +494,12 @@ function saveAdminChanges() {
         }
     });
     data.pokedex = newPokedex;
-
     saveData();
     renderAll();
     closeAdminPage();
     showNotification("관리자 설정이 저장되었습니다.");
 }
 
-// --- 유틸리티 함수 ---
 function showNotification(message, type = "info") {
     const notification = document.createElement("div");
     const bgColor = type === "error" ? "bg-red-500" : "bg-blue-500";
@@ -482,31 +509,24 @@ function showNotification(message, type = "info") {
     setTimeout(() => { notification.remove(); }, 3000);
 }
 
-// 객체를 깊은 병합하는 헬퍼 함수
-function deepMerge(target, source) {
-    for (const key in source) {
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-            if (!target[key]) Object.assign(target, { [key]: {} });
-            deepMerge(target[key], source[key]);
-        } else {
-            Object.assign(target, { [key]: source[key] });
-        }
-    }
-    return target;
-}
-
-// --- 애플리케이션 시작 ---
-function main() {
-    loadData();
-    setupUI();
-    setupListeners();
-    renderAll();
-}
-
 // --- 나머지 함수들 (기존 코드와 동일) ---
-function handleInventoryClick(event) {
-    const hatchButton = event.target.closest(".hatch-btn");
-    if (hatchButton) hatchEgg(hatchButton.dataset.eggType);
+function hatchEgg(eggType) {
+    if (!data.inventory[eggType] || data.inventory[eggType] <= 0) return;
+    data.inventory[eggType]--;
+    const probabilities = data.probabilityConfig[eggType];
+    const caughtPokemon = selectRandomPokemon(probabilities);
+    if (!caughtPokemon) return;
+    const isShiny = Math.random() < (data.probabilityConfig.shiny[caughtPokemon.rarity] / 100);
+    const pokemonKey = `${caughtPokemon.id}_${isShiny ? "shiny" : "normal"}`;
+    const isNew = data.pokedex[pokemonKey] === undefined;
+    if (data.pokedex[pokemonKey]) {
+        data.pokedex[pokemonKey].count++;
+    } else {
+        data.pokedex[pokemonKey] = { ...caughtPokemon, isShiny: isShiny, count: 1 };
+    }
+    saveData();
+    renderAll();
+    showCaughtModal(data.pokedex[pokemonKey], isNew);
 }
 function updatePokedexProgress() {
     const collectedIds = Object.keys(data.pokedex).map(key => key.split('_')[0]);
