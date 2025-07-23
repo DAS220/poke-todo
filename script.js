@@ -176,8 +176,8 @@ const setupListeners = () => {
     dom.pokedexListContainer.addEventListener('click', handlePokedexListClick);
     dom.pokemonDetailView.addEventListener('click', handleDetailViewClick);
     dom.synthesisBtn.addEventListener('click', handleSynthesis);
-    // dom.shopSellList.addEventListener('click', (e) => handleShopAction(e, 'sell')); // 상점 기능은 미구현
-    // dom.shopBuyList.addEventListener('click', (e) => handleShopAction(e, 'buy')); // 상점 기능은 미구현
+    dom.shopSellList.addEventListener('click', (e) => handleShopAction(e, 'sell'));
+    dom.shopBuyList.addEventListener('click', (e) => handleShopAction(e, 'buy'));
     dom.modalCloseBtn.addEventListener('click', () => dom.modalCaught.classList.add('hidden'));
     dom.modalTestCloseBtn.addEventListener('click', () => dom.modalTestAlert.classList.add('hidden'));
     dom.adminCloseBtn.addEventListener('click', closeAdminPage);
@@ -191,7 +191,7 @@ const renderAll = () => {
     renderTodos();
     renderInventory();
     renderPokedex();
-    // renderShop(); // 상점 기능은 미구현
+    renderShop();
     updatePokedexProgress();
 };
 
@@ -610,6 +610,94 @@ function handleSynthesis() {
     renderAll();
     showCaughtModal(data.pokedex[pokemonKey], isNew);
     showNotification(`${resultRarity} 등급 포켓몬 합성에 성공했습니다!`);
+}
+
+// --- 상점 기능 ---
+function renderShop() {
+    // 판매 목록 렌더링
+    dom.shopSellList.innerHTML = "";
+    let sellHTML = "";
+    const sellableItems = Object.keys(data.shopConfig.sell);
+
+    sellableItems.forEach(itemKey => {
+        const itemInfo = EGG_TYPES[itemKey];
+        const price = data.shopConfig.sell[itemKey];
+        const userCount = data.inventory[itemKey] || 0;
+        const canSell = userCount > 0;
+
+        sellHTML += `
+            <div class="flex items-center justify-between p-2 bg-gray-700/50 rounded-lg">
+                <div class="flex items-center">
+                    <img src="${itemInfo.img}" class="h-8 w-8 mr-3">
+                    <div>
+                        <p class="font-semibold">${itemInfo.name}</p>
+                        <p class="text-sm text-gray-400">보유: ${userCount}개</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                     <span class="font-semibold text-yellow-400">${price} 코인</span>
+                    <button data-item-key="${itemKey}" class="sell-btn bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-bold py-1 px-3 rounded-md ${!canSell ? 'opacity-50 cursor-not-allowed' : ''}" ${!canSell ? 'disabled' : ''}>판매</button>
+                </div>
+            </div>
+        `;
+    });
+    dom.shopSellList.innerHTML = sellHTML || '<p class="text-gray-500">판매할 아이템이 없습니다.</p>';
+
+    // 구매 목록 렌더링
+    dom.shopBuyList.innerHTML = "";
+    let buyHTML = "";
+    const buyableItems = Object.keys(data.shopConfig.buy);
+
+    buyableItems.forEach(itemKey => {
+        const itemInfo = EGG_TYPES[itemKey];
+        const price = data.shopConfig.buy[itemKey];
+        const canBuy = data.inventory.coins >= price;
+
+        buyHTML += `
+             <div class="flex items-center justify-between p-2 bg-gray-700/50 rounded-lg">
+                <div class="flex items-center">
+                    <img src="${itemInfo.img}" class="h-8 w-8 mr-3">
+                    <p class="font-semibold">${itemInfo.name}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="font-semibold text-yellow-400">${price} 코인</span>
+                    <button data-item-key="${itemKey}" class="buy-btn bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-3 rounded-md ${!canBuy ? 'opacity-50 cursor-not-allowed' : ''}" ${!canBuy ? 'disabled' : ''}>구매</button>
+                </div>
+            </div>
+        `;
+    });
+    dom.shopBuyList.innerHTML = buyHTML;
+}
+
+function handleShopAction(event, actionType) {
+    const button = event.target.closest(actionType === 'sell' ? '.sell-btn' : '.buy-btn');
+    if (!button || button.disabled) return;
+
+    const itemKey = button.dataset.itemKey;
+
+    if (actionType === 'sell') {
+        if (data.inventory[itemKey] > 0) {
+            data.inventory[itemKey]--;
+            data.inventory.coins += data.shopConfig.sell[itemKey];
+            showNotification(`${EGG_TYPES[itemKey].name} 1개를 판매했습니다.`, "info");
+        } else {
+            showNotification("판매할 아이템이 부족합니다.", "error");
+            return;
+        }
+    } else if (actionType === 'buy') {
+        const price = data.shopConfig.buy[itemKey];
+        if (data.inventory.coins >= price) {
+            data.inventory.coins -= price;
+            data.inventory[itemKey]++;
+            showNotification(`${EGG_TYPES[itemKey].name} 1개를 구매했습니다.`, "info");
+        } else {
+            showNotification("코인이 부족합니다.", "error");
+            return;
+        }
+    }
+
+    saveData();
+    renderAll();
 }
 
 
