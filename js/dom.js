@@ -1,4 +1,4 @@
-// js/dom.js
+// js/dom.js 
 export const dom = {
     appContainer: document.getElementById('app-container'),
     todoForm: document.getElementById('todo-form'),
