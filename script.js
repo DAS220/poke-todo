@@ -11,9 +11,8 @@ let data = {};
 let pokedexTab = 'collected';
 let selectedPokemonKey = null;
 let synthesisSelection = [];
-let todoIdToComplete = null; // 비밀번호 확인을 위해 임시로 todo ID 저장
+let todoIdToComplete = null;
 
-// DOM 요소를 한 곳에서 관리
 const dom = {
     appContainer: document.getElementById('app-container'),
     todoForm: document.getElementById('todo-form'),
@@ -60,14 +59,13 @@ const dom = {
     adminDailyTodoSettings: document.getElementById('admin-daily-todo-settings'),
     adminNewDailyTodoInput: document.getElementById('admin-new-daily-todo-input'),
     adminAddDailyTodoBtn: document.getElementById('admin-add-daily-todo-btn'),
-    // 비밀번호 모달 추가
     modalPassword: document.getElementById('modal-password'),
     passwordInput: document.getElementById('password-input'),
     passwordConfirmBtn: document.getElementById('password-confirm-btn'),
     passwordCancelBtn: document.getElementById('password-cancel-btn'),
+    adminPasswordSetting: document.getElementById('admin-password-setting'),
 };
 
-// 기본 데이터 구조
 const defaultData = {
     todos: {},
     pokedex: {},
@@ -80,6 +78,7 @@ const defaultData = {
     },
     dailyTodos: ["구몬하기", "책읽기", "듀오링고하기"],
     lastLoginDate: null,
+    completionPassword: "pass!",
     rewardProbabilities: {
         epic: 1,
         rare: 4,
@@ -191,7 +190,6 @@ const setupListeners = () => {
     dom.adminAddDailyTodoBtn.addEventListener('click', handleAdminAddDailyTodo);
     dom.adminDailyTodoSettings.addEventListener('click', handleAdminEditOrRemoveDailyTodo);
     
-    // 비밀번호 모달 리스너 추가
     dom.passwordConfirmBtn.addEventListener('click', handlePasswordConfirm);
     dom.passwordCancelBtn.addEventListener('click', () => {
         dom.modalPassword.classList.add('hidden');
@@ -231,7 +229,6 @@ function handleTodoClick(event) {
     if (!taskItem) return;
     const todoId = taskItem.dataset.id;
     if (event.target.matches(".complete-btn")) {
-        // 바로 완료하지 않고 비밀번호 모달을 엽니다.
         todoIdToComplete = todoId;
         dom.passwordInput.value = '';
         dom.modalPassword.classList.remove('hidden');
@@ -243,7 +240,7 @@ function handleTodoClick(event) {
 
 function handlePasswordConfirm() {
     const password = dom.passwordInput.value;
-    if (password === 'pass!') {
+    if (password === data.completionPassword) {
         if (todoIdToComplete) {
             handleCompleteTodo(todoIdToComplete);
         }
@@ -358,8 +355,7 @@ function renderInventory() {
     dom.inventoryList.innerHTML = "";
     let inventoryHTML = `
         <div class="flex items-center justify-between">
-            <div class="flex items-center">
-                <img src="https://i.imgur.com/sSddy3V.png" class="h-8 w-8 mr-3" alt="코인" style="image-rendering: pixelated;">
+            <div class="flex items-center pl-11">
                 <span class="font-bold text-lg">코인</span>
             </div>
             <span class="font-bold text-lg text-yellow-400">${data.inventory.coins}</span>
@@ -392,7 +388,13 @@ function hatchEgg(eggType) {
     data.inventory[eggType]--;
     const probabilities = data.probabilityConfig[eggType];
     const caughtPokemon = selectRandomPokemon(probabilities);
-    if (!caughtPokemon) return;
+    if (!caughtPokemon) {
+        data.inventory[eggType]++;
+        showNotification("알 부화에 실패했습니다.", "error");
+        saveData();
+        renderAll();
+        return;
+    }
     const isShiny = Math.random() < (data.probabilityConfig.shiny[caughtPokemon.rarity] / 100);
     const pokemonKey = `${caughtPokemon.id}_${isShiny ? "shiny" : "normal"}`;
     const isNew = data.pokedex[pokemonKey] === undefined;
@@ -403,7 +405,7 @@ function hatchEgg(eggType) {
     }
     saveData();
     renderAll();
-    showCaughtModal(data.pokedex[pokemonKey], isNew);
+    showCaughtModal(data.pokedex[pokemonKey], isNew, eggType);
 }
 
 function selectRandomPokemon(probabilities) {
@@ -592,7 +594,6 @@ function handleSynthesis() {
 
     const selectedPokemons = synthesisSelection.map(key => data.pokedex[key]);
     
-    // 합성 재료 소모
     selectedPokemons.forEach(p => {
         const key = `${p.id}_${p.isShiny ? "shiny" : "normal"}`;
         data.pokedex[key].count--;
@@ -601,7 +602,6 @@ function handleSynthesis() {
         }
     });
 
-    // 합성 결과 계산
     const totalRarityValue = selectedPokemons.reduce((sum, p) => {
         const rarityMap = { 'Common': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4 };
         return sum + rarityMap[p.rarity] * (p.isShiny ? 1.5 : 1);
@@ -613,19 +613,17 @@ function handleSynthesis() {
     else if (totalRarityValue >= 4) resultRarity = 'Rare';
     else resultRarity = 'Common';
     
-    // 결과 포켓몬 랜덤 선택
     const probabilities = { [resultRarity]: 100 };
     const caughtPokemon = selectRandomPokemon(probabilities);
     if (!caughtPokemon) {
         showNotification("합성에 실패했습니다. 재료가 반환됩니다.", "error");
-        // 재료 복구 로직 (간소화)
         synthesisSelection.forEach(key => { data.pokedex[key].count++; });
         saveData();
         renderAll();
         return;
     }
 
-    const isShiny = Math.random() < (data.probabilityConfig.shiny[caughtPokemon.rarity] / 100 * 1.5); // 합성 시 이로치 확률 1.5배
+    const isShiny = Math.random() < (data.probabilityConfig.shiny[caughtPokemon.rarity] / 100 * 1.5);
     const pokemonKey = `${caughtPokemon.id}_${isShiny ? "shiny" : "normal"}`;
     const isNew = data.pokedex[pokemonKey] === undefined;
 
@@ -644,7 +642,6 @@ function handleSynthesis() {
 
 // --- 상점 기능 ---
 function renderShop() {
-    // 판매 목록 렌더링
     dom.shopSellList.innerHTML = "";
     let sellHTML = "";
     const sellableItems = Object.keys(data.shopConfig.sell);
@@ -673,7 +670,6 @@ function renderShop() {
     });
     dom.shopSellList.innerHTML = sellHTML || '<p class="text-gray-500">판매할 아이템이 없습니다.</p>';
 
-    // 구매 목록 렌더링
     dom.shopBuyList.innerHTML = "";
     let buyHTML = "";
     const buyableItems = Object.keys(data.shopConfig.buy);
@@ -732,10 +728,17 @@ function handleShopAction(event, actionType) {
 
 
 // --- 모달 및 알림 ---
-function showCaughtModal(pokemon, isNew) {
+function showCaughtModal(pokemon, isNew, eggType) {
     dom.pokeballContainer.classList.remove("hidden");
     dom.caughtPokemonInfo.classList.add("hidden");
     const pokeballImg = dom.pokeballContainer.querySelector("img");
+    
+    if (eggType && EGG_TYPES[eggType]) {
+        pokeballImg.src = EGG_TYPES[eggType].img;
+    } else {
+        pokeballImg.src = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
+    }
+
     pokeballImg.classList.remove("pokeball-animation");
     dom.modalCaught.classList.remove("hidden");
     setTimeout(() => { pokeballImg.classList.add("pokeball-animation"); }, 100);
@@ -788,6 +791,9 @@ function closeAdminPage() {
 }
 
 function renderAdminPage() {
+    // 비밀번호 설정 렌더링
+    dom.adminPasswordSetting.value = data.completionPassword;
+
     dom.adminDailyTodoSettings.innerHTML = data.dailyTodos.map((todo, index) => `
         <div class="flex items-center gap-2">
             <input type="text" value="${todo}" data-index="${index}" class="admin-daily-todo-item flex-grow bg-gray-700 text-white rounded-lg px-3 py-1">
@@ -866,6 +872,12 @@ function handleAdminEditOrRemoveDailyTodo(event) {
 }
 
 function saveAdminChanges() {
+    // 비밀번호 저장
+    const newPassword = dom.adminPasswordSetting.value.trim();
+    if (newPassword) {
+        data.completionPassword = newPassword;
+    }
+
     const newDailyTodos = [];
     document.querySelectorAll('.admin-daily-todo-item').forEach(input => {
         const text = input.value.trim();
@@ -924,10 +936,6 @@ function saveAdminChanges() {
 }
 
 // --- 애플리케이션 시작 ---
-
-/**
- * 애플리케이션을 초기화하고 실행하는 메인 함수입니다.
- */
 function main() {
     loadData();
     setupUI();
@@ -935,7 +943,5 @@ function main() {
     renderAll();
 }
 
-// DOM이 완전히 로드된 후 메인 함수를 호출합니다.
-// 이렇게 하면 스크립트가 HTML 요소보다 먼저 실행되어 발생하는 오류를 방지할 수 있습니다.
 document.addEventListener('DOMContentLoaded', main);
 
