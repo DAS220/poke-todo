@@ -11,6 +11,7 @@ let data = {};
 let pokedexTab = 'collected';
 let selectedPokemonKey = null;
 let synthesisSelection = [];
+let todoIdToComplete = null; // 비밀번호 확인을 위해 임시로 todo ID 저장
 
 // DOM 요소를 한 곳에서 관리
 const dom = {
@@ -59,6 +60,11 @@ const dom = {
     adminDailyTodoSettings: document.getElementById('admin-daily-todo-settings'),
     adminNewDailyTodoInput: document.getElementById('admin-new-daily-todo-input'),
     adminAddDailyTodoBtn: document.getElementById('admin-add-daily-todo-btn'),
+    // 비밀번호 모달 추가
+    modalPassword: document.getElementById('modal-password'),
+    passwordInput: document.getElementById('password-input'),
+    passwordConfirmBtn: document.getElementById('password-confirm-btn'),
+    passwordCancelBtn: document.getElementById('password-cancel-btn'),
 };
 
 // 기본 데이터 구조
@@ -184,6 +190,13 @@ const setupListeners = () => {
     dom.adminSaveBtn.addEventListener('click', saveAdminChanges);
     dom.adminAddDailyTodoBtn.addEventListener('click', handleAdminAddDailyTodo);
     dom.adminDailyTodoSettings.addEventListener('click', handleAdminEditOrRemoveDailyTodo);
+    
+    // 비밀번호 모달 리스너 추가
+    dom.passwordConfirmBtn.addEventListener('click', handlePasswordConfirm);
+    dom.passwordCancelBtn.addEventListener('click', () => {
+        dom.modalPassword.classList.add('hidden');
+        todoIdToComplete = null;
+    });
 };
 
 // --- 렌더링 함수 ---
@@ -218,10 +231,27 @@ function handleTodoClick(event) {
     if (!taskItem) return;
     const todoId = taskItem.dataset.id;
     if (event.target.matches(".complete-btn")) {
-        handleCompleteTodo(todoId);
+        // 바로 완료하지 않고 비밀번호 모달을 엽니다.
+        todoIdToComplete = todoId;
+        dom.passwordInput.value = '';
+        dom.modalPassword.classList.remove('hidden');
+        dom.passwordInput.focus();
     } else if (event.target.matches(".delete-btn")) {
         handleDeleteTodo(todoId);
     }
+}
+
+function handlePasswordConfirm() {
+    const password = dom.passwordInput.value;
+    if (password === 'pass!') {
+        if (todoIdToComplete) {
+            handleCompleteTodo(todoIdToComplete);
+        }
+    } else {
+        showNotification('확인번호가 일치하지 않습니다.', 'error');
+    }
+    dom.modalPassword.classList.add('hidden');
+    todoIdToComplete = null;
 }
 
 function handleCompleteTodo(todoId) {
@@ -745,7 +775,7 @@ function switchMainTab(tabName) {
     dom.mainTabShop.classList.toggle('text-gray-500', isPokedex);
 }
 
-// --- 관리자 페이지 기능 (생략 없이 기존 코드 유지) ---
+// --- 관리자 페이지 기능 ---
 function openAdminPage() {
     dom.appContainer.classList.add('hidden');
     dom.adminPage.classList.remove('hidden');
@@ -908,3 +938,4 @@ function main() {
 // DOM이 완전히 로드된 후 메인 함수를 호출합니다.
 // 이렇게 하면 스크립트가 HTML 요소보다 먼저 실행되어 발생하는 오류를 방지할 수 있습니다.
 document.addEventListener('DOMContentLoaded', main);
+
