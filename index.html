@@ -167,6 +167,20 @@
         </div>
     </div>
     
+    <!-- 비밀번호 확인 모달 -->
+    <div id="modal-password" class="fixed inset-0 modal-bg flex items-center justify-center z-30 hidden">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl p-8 text-center max-w-sm w-full relative">
+            <h2 class="text-2xl font-bold mb-4 text-yellow-400">확인번호 입력</h2>
+            <p class="text-gray-300 mb-6">할 일 완료를 위해 확인번호를 입력하세요.</p>
+            <input type="password" id="password-input" class="w-full bg-gray-700 text-white rounded-lg px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="확인번호">
+            <div class="flex gap-4">
+                <button id="password-cancel-btn" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">취소</button>
+                <button id="password-confirm-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">확인</button>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
+
