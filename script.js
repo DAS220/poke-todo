@@ -12,6 +12,7 @@ let pokedexTab = 'collected';
 let selectedPokemonKey = null;
 let synthesisSelection = [];
 
+// DOM 요소를 한 곳에서 관리
 const dom = {
     appContainer: document.getElementById('app-container'),
     todoForm: document.getElementById('todo-form'),
@@ -60,6 +61,7 @@ const dom = {
     adminAddDailyTodoBtn: document.getElementById('admin-add-daily-todo-btn'),
 };
 
+// 기본 데이터 구조
 const defaultData = {
     todos: {},
     pokedex: {},
@@ -92,6 +94,7 @@ const defaultData = {
     }
 };
 
+// --- 데이터 관리 ---
 function deepMerge(target, source) {
     const output = { ...target };
     if (isObject(target) && isObject(source)) {
@@ -148,6 +151,7 @@ function checkDateAndResetDailies() {
     }
 }
 
+// --- UI 초기 설정 및 이벤트 리스너 ---
 const setupUI = () => {
     const generations = [...new Set(POKEMON_DATA.map(p => p.gen))];
     generations.sort((a, b) => a - b).forEach(gen => {
@@ -172,8 +176,8 @@ const setupListeners = () => {
     dom.pokedexListContainer.addEventListener('click', handlePokedexListClick);
     dom.pokemonDetailView.addEventListener('click', handleDetailViewClick);
     dom.synthesisBtn.addEventListener('click', handleSynthesis);
-    dom.shopSellList.addEventListener('click', (e) => handleShopAction(e, 'sell'));
-    dom.shopBuyList.addEventListener('click', (e) => handleShopAction(e, 'buy'));
+    // dom.shopSellList.addEventListener('click', (e) => handleShopAction(e, 'sell')); // 상점 기능은 미구현
+    // dom.shopBuyList.addEventListener('click', (e) => handleShopAction(e, 'buy')); // 상점 기능은 미구현
     dom.modalCloseBtn.addEventListener('click', () => dom.modalCaught.classList.add('hidden'));
     dom.modalTestCloseBtn.addEventListener('click', () => dom.modalTestAlert.classList.add('hidden'));
     dom.adminCloseBtn.addEventListener('click', closeAdminPage);
@@ -182,14 +186,16 @@ const setupListeners = () => {
     dom.adminDailyTodoSettings.addEventListener('click', handleAdminEditOrRemoveDailyTodo);
 };
 
+// --- 렌더링 함수 ---
 const renderAll = () => {
     renderTodos();
     renderInventory();
     renderPokedex();
-    renderShop();
+    // renderShop(); // 상점 기능은 미구현
     updatePokedexProgress();
 };
 
+// --- To-Do 관련 함수 ---
 function handleAddTodo(event) {
     event.preventDefault();
     const taskText = dom.todoInput.value.trim();
@@ -271,7 +277,6 @@ function handleDeleteTodo(todoId) {
 }
 
 function runTestMode() {
-    // 3종의 중복 포켓몬 추가
     const shuffled = [...POKEMON_DATA].sort(() => 0.5 - Math.random());
     const testPokemon = shuffled.slice(0, 3);
     testPokemon.forEach(pokemon => {
@@ -283,14 +288,12 @@ function runTestMode() {
         }
     });
 
-    // 종류별 알 1개씩 추가
     data.inventory.normalEgg++;
     data.inventory.rareEgg++;
     data.inventory.epicEgg++;
 
     saveData();
     renderAll();
-    // 모달 내용 변경
     const modal = document.getElementById('modal-test-alert');
     modal.querySelector('h2').textContent = '테스트 모드 활성화';
     modal.querySelector('p').innerHTML = '중복 포켓몬 3종 (각 2마리)과<br>알 3종 (각 1개)이 추가되었습니다.';
@@ -304,7 +307,7 @@ function renderTodos() {
         dom.todoList.innerHTML = '<li class="text-gray-500 text-center py-4">할 일이 없습니다.</li>';
         return;
     }
-    todos.sort(([, a], [, b]) => (a.isDaily === b.isDaily) ? (a.completed - b.completed) : (b.isDaily ? -1 : 1))
+    todos.sort(([, a], [, b]) => (a.isDaily === b.isDaily) ? (a.completed - b.completed) : (b.isDaily ? 1 : -1))
          .forEach(([id, todo]) => {
             const li = document.createElement("li");
             li.dataset.id = id;
@@ -320,6 +323,7 @@ function renderTodos() {
         });
 }
 
+// --- 인벤토리 관련 함수 ---
 function renderInventory() {
     dom.inventoryList.innerHTML = "";
     let inventoryHTML = `
@@ -353,6 +357,307 @@ function handleInventoryClick(event) {
     }
 }
 
+function hatchEgg(eggType) {
+    if (!data.inventory[eggType] || data.inventory[eggType] <= 0) return;
+    data.inventory[eggType]--;
+    const probabilities = data.probabilityConfig[eggType];
+    const caughtPokemon = selectRandomPokemon(probabilities);
+    if (!caughtPokemon) return;
+    const isShiny = Math.random() < (data.probabilityConfig.shiny[caughtPokemon.rarity] / 100);
+    const pokemonKey = `${caughtPokemon.id}_${isShiny ? "shiny" : "normal"}`;
+    const isNew = data.pokedex[pokemonKey] === undefined;
+    if (data.pokedex[pokemonKey]) {
+        data.pokedex[pokemonKey].count++;
+    } else {
+        data.pokedex[pokemonKey] = { ...caughtPokemon, isShiny: isShiny, count: 1 };
+    }
+    saveData();
+    renderAll();
+    showCaughtModal(data.pokedex[pokemonKey], isNew);
+}
+
+function selectRandomPokemon(probabilities) {
+    let total = 0;
+    for (const rarity in probabilities) {
+        total += probabilities[rarity];
+    }
+    let random = Math.random() * total;
+    let selectedRarity = null;
+    for (const rarity in probabilities) {
+        if (random < probabilities[rarity]) {
+            selectedRarity = rarity;
+            break;
+        }
+        random -= probabilities[rarity];
+    }
+    if (!selectedRarity) return null;
+    const candidates = POKEMON_DATA.filter(p => p.rarity === selectedRarity);
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+// --- 도감 관련 함수 ---
+function updatePokedexProgress() {
+    const collectedIds = Object.keys(data.pokedex).map(key => key.split('_')[0]);
+    const uniqueCollectedCount = new Set(collectedIds).size;
+    const totalPokemonCount = POKEMON_DATA.length;
+    dom.pokedexProgress.textContent = `도감 완성도: ${uniqueCollectedCount} / ${totalPokemonCount}`;
+}
+
+function renderPokedex() {
+    dom.pokedexListContainer.innerHTML = "";
+    let filteredList;
+    if (pokedexTab === 'uncollected') {
+        const collectedIds = new Set(Object.keys(data.pokedex).map(key => String(key.split('_')[0])));
+        filteredList = POKEMON_DATA.filter(p => !collectedIds.has(String(p.id)));
+    } else {
+        let allCollected = Object.values(data.pokedex);
+        if (pokedexTab === 'duplicates') {
+            filteredList = allCollected.filter(p => p.count > 1);
+        } else {
+            filteredList = allCollected;
+        }
+    }
+    const genFilterValue = dom.genFilter.value;
+    const rarityFilterValue = dom.rarityFilter.value;
+    if (genFilterValue !== 'all') filteredList = filteredList.filter(p => p.gen == genFilterValue);
+    if (rarityFilterValue !== 'all') filteredList = filteredList.filter(p => p.rarity === rarityFilterValue);
+    filteredList.sort((a, b) => a.id - b.id || (a.isShiny ? 1 : 0) - (b.isShiny ? 1 : 0));
+    if (filteredList.length === 0) {
+        dom.pokedexListContainer.innerHTML = '<div class="text-center text-gray-500 py-8">해당하는 포켓몬이 없습니다.</div>';
+        showPokemonDetails(null);
+        return;
+    }
+    filteredList.forEach(pokemon => {
+        const pokemonKey = `${pokemon.id}_${pokemon.isShiny ? "shiny" : "normal"}`;
+        const isSelectedForSynthesis = synthesisSelection.includes(pokemonKey);
+        const li = document.createElement("div");
+        li.className = `pokedex-list-item p-2 rounded-md hover:bg-gray-700 cursor-pointer flex justify-between items-center ${selectedPokemonKey === pokemonKey ? "selected" : ""}`;
+        li.dataset.key = pokemonKey;
+        const nameClass = pokedexTab === 'uncollected' ? "text-gray-500" : "font-semibold";
+        const shinyMark = pokemon.isShiny ? "✨" : "";
+        let countDisplay = '';
+        if (pokedexTab !== 'uncollected') {
+            const synthesisMark = isSelectedForSynthesis ? '<span class="text-xs text-purple-400 mr-2">선택됨</span>' : '';
+            countDisplay = `<div>${synthesisMark}<span class="text-sm font-bold text-gray-300">x${pokemon.count || 0}</span></div>`;
+        }
+        li.innerHTML = `<div><span class="text-gray-400">#${String(pokemon.id).padStart(3, "0")}</span><span class="ml-3 ${nameClass}">${pokemon.name} ${shinyMark}</span></div>${countDisplay}`;
+        dom.pokedexListContainer.appendChild(li);
+    });
+    const currentSelectionExists = selectedPokemonKey && (data.pokedex[selectedPokemonKey] || pokedexTab === 'uncollected');
+    if (currentSelectionExists) {
+        showPokemonDetails(selectedPokemonKey);
+    } else if (filteredList.length > 0) {
+        const firstPokemon = filteredList[0];
+        const firstPokemonKey = `${firstPokemon.id}_${firstPokemon.isShiny ? "shiny" : "normal"}`;
+        showPokemonDetails(firstPokemonKey);
+    } else {
+        showPokemonDetails(null);
+    }
+}
+
+function showPokemonDetails(pokemonKey) {
+    selectedPokemonKey = pokemonKey;
+    let pokemon;
+    if (pokemonKey && data.pokedex[pokemonKey]) {
+        pokemon = data.pokedex[pokemonKey];
+    } else if (pokemonKey) {
+        const [id] = pokemonKey.split('_');
+        const basePokemon = POKEMON_DATA.find(p => p.id == id);
+        if (basePokemon) {
+            pokemon = { ...basePokemon, isShiny: pokemonKey.endsWith('shiny'), count: 0 };
+        }
+    }
+    if (!pokemon) {
+        dom.pokemonDetailView.innerHTML = '<p class="text-gray-500">리스트에서 포켓몬을 선택하세요.</p>';
+        return;
+    }
+    const hasPokemon = pokemon.count > 0;
+    const shinyClass = pokemon.isShiny ? "shiny-pokemon-image" : "";
+    const shinyText = pokemon.isShiny ? "shiny-text" : "text-white";
+    const shinyMark = pokemon.isShiny ? "✨" : "";
+    if (hasPokemon) {
+        const isSelectedForSynthesis = synthesisSelection.includes(selectedPokemonKey);
+        let synthesisButton = '';
+        if (pokedexTab === 'duplicates' && pokemon.count > 1) {
+            const disabled = synthesisSelection.length >= 3 && !isSelectedForSynthesis;
+            synthesisButton = isSelectedForSynthesis
+                ? `<button data-action="deselect-synthesis" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">합성 선택 해제</button>`
+                : `<button data-action="select-synthesis" class="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''}" ${disabled ? 'disabled' : ''}>합성용으로 선택</button>`;
+        }
+        dom.pokemonDetailView.innerHTML = `
+            <div class="w-full text-center">
+                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4 ${shinyClass}">
+                <h3 class="text-3xl font-bold ${shinyText}">${pokemon.name} ${shinyMark}</h3>
+                <p class="text-gray-400 mb-2">#${String(pokemon.id).padStart(3, "0")}</p>
+                <div class="flex justify-center items-center gap-2 mb-4">
+                    <span class="px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[pokemon.rarity]}">${pokemon.rarity}</span>
+                    <span class="text-lg font-bold">x${pokemon.count}</span>
+                </div>
+                ${synthesisButton}
+            </div>`;
+    } else {
+        dom.pokemonDetailView.innerHTML = `
+            <div class="w-full text-center">
+                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4 pokemon-silhouette">
+                <h3 class="text-3xl font-bold text-gray-500">???</h3>
+                <p class="text-gray-400 mb-2">#${String(pokemon.id).padStart(3, "0")}</p>
+                <div class="flex justify-center items-center gap-2 mb-4"><span class="px-3 py-1 text-sm font-semibold text-gray-200 bg-gray-600 rounded-full">${pokemon.rarity}</span></div>
+                <p class="text-gray-500">아직 발견하지 못한 포켓몬입니다.</p>
+            </div>`;
+    }
+    document.querySelectorAll(".pokedex-list-item").forEach(el => el.classList.remove("selected"));
+    const selectedElement = document.querySelector(`.pokedex-list-item[data-key='${pokemonKey}']`);
+    if (selectedElement) selectedElement.classList.add("selected");
+}
+
+function switchPokedexTab(tabName) {
+    pokedexTab = tabName;
+    synthesisSelection = [];
+    selectedPokemonKey = null;
+    const tabs = { collected: dom.pokedexTabCollected, duplicates: dom.pokedexTabDuplicates, uncollected: dom.pokedexTabUncollected };
+    for (const key in tabs) {
+        const isSelected = key === tabName;
+        tabs[key].classList.toggle("border-blue-500", isSelected);
+        tabs[key].classList.toggle("text-white", isSelected);
+        tabs[key].classList.toggle("text-gray-500", !isSelected);
+    }
+    dom.synthesisControls.classList.toggle("hidden", tabName !== 'duplicates');
+    updateSynthesisUI();
+    renderPokedex();
+}
+
+function handlePokedexListClick(event) {
+    const listItem = event.target.closest(".pokedex-list-item");
+    if (listItem) showPokemonDetails(listItem.dataset.key);
+}
+
+function handleDetailViewClick(event) {
+    const button = event.target.closest("button");
+    if (!button || !selectedPokemonKey) return;
+    const action = button.dataset.action;
+    const pokemonToSelect = data.pokedex[selectedPokemonKey];
+    if (!pokemonToSelect || pokemonToSelect.count <= 1) {
+        showNotification("합성에는 2마리 이상 보유한 포켓몬만 사용할 수 있습니다.", "error");
+        return;
+    }
+    const index = synthesisSelection.indexOf(selectedPokemonKey);
+    if (action === 'select-synthesis' && index === -1 && synthesisSelection.length < 3) {
+        synthesisSelection.push(selectedPokemonKey);
+    } else if (action === 'deselect-synthesis' && index > -1) {
+        synthesisSelection.splice(index, 1);
+    }
+    updateSynthesisUI();
+    renderPokedex();
+}
+
+// --- 합성 기능 ---
+function updateSynthesisUI() {
+    dom.synthesisCount.textContent = synthesisSelection.length;
+    dom.synthesisBtn.disabled = synthesisSelection.length !== 3;
+}
+
+function handleSynthesis() {
+    if (synthesisSelection.length !== 3) return;
+
+    const selectedPokemons = synthesisSelection.map(key => data.pokedex[key]);
+    
+    // 합성 재료 소모
+    selectedPokemons.forEach(p => {
+        const key = `${p.id}_${p.isShiny ? "shiny" : "normal"}`;
+        data.pokedex[key].count--;
+        if(data.pokedex[key].count === 0) {
+            delete data.pokedex[key];
+        }
+    });
+
+    // 합성 결과 계산
+    const totalRarityValue = selectedPokemons.reduce((sum, p) => {
+        const rarityMap = { 'Common': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4 };
+        return sum + rarityMap[p.rarity] * (p.isShiny ? 1.5 : 1);
+    }, 0);
+
+    let resultRarity;
+    if (totalRarityValue >= 10) resultRarity = 'Legendary';
+    else if (totalRarityValue >= 7) resultRarity = 'Epic';
+    else if (totalRarityValue >= 4) resultRarity = 'Rare';
+    else resultRarity = 'Common';
+    
+    // 결과 포켓몬 랜덤 선택
+    const probabilities = { [resultRarity]: 100 };
+    const caughtPokemon = selectRandomPokemon(probabilities);
+    if (!caughtPokemon) {
+        showNotification("합성에 실패했습니다. 재료가 반환됩니다.", "error");
+        // 재료 복구 로직 (간소화)
+        synthesisSelection.forEach(key => { data.pokedex[key].count++; });
+        saveData();
+        renderAll();
+        return;
+    }
+
+    const isShiny = Math.random() < (data.probabilityConfig.shiny[caughtPokemon.rarity] / 100 * 1.5); // 합성 시 이로치 확률 1.5배
+    const pokemonKey = `${caughtPokemon.id}_${isShiny ? "shiny" : "normal"}`;
+    const isNew = data.pokedex[pokemonKey] === undefined;
+
+    if (data.pokedex[pokemonKey]) {
+        data.pokedex[pokemonKey].count++;
+    } else {
+        data.pokedex[pokemonKey] = { ...caughtPokemon, isShiny: isShiny, count: 1 };
+    }
+    
+    synthesisSelection = [];
+    saveData();
+    renderAll();
+    showCaughtModal(data.pokedex[pokemonKey], isNew);
+    showNotification(`${resultRarity} 등급 포켓몬 합성에 성공했습니다!`);
+}
+
+
+// --- 모달 및 알림 ---
+function showCaughtModal(pokemon, isNew) {
+    dom.pokeballContainer.classList.remove("hidden");
+    dom.caughtPokemonInfo.classList.add("hidden");
+    const pokeballImg = dom.pokeballContainer.querySelector("img");
+    pokeballImg.classList.remove("pokeball-animation");
+    dom.modalCaught.classList.remove("hidden");
+    setTimeout(() => { pokeballImg.classList.add("pokeball-animation"); }, 100);
+    setTimeout(() => {
+        dom.pokeballContainer.classList.add("hidden");
+        dom.caughtPokemonInfo.classList.remove("hidden");
+        dom.pokemonName.innerHTML = `${pokemon.name} ${pokemon.isShiny ? '<span class="shiny-text">✨</span>' : ''}`;
+        dom.pokemonImage.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`;
+        dom.pokemonImage.className = `mx-auto h-48 w-48 object-contain mb-4 ${pokemon.isShiny ? "shiny-pokemon-image" : ""}`;
+        dom.pokemonId.textContent = `#${String(pokemon.id).padStart(3, "0")}`;
+        dom.pokemonRarity.textContent = pokemon.rarity;
+        dom.pokemonRarity.className = `px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[pokemon.rarity]}`;
+        dom.pokemonIsNew.textContent = isNew ? (pokemon.isShiny ? "✨ 새로운 이로치 포켓몬! ✨" : "✨ 새로운 포켓몬! ✨") : (pokemon.isShiny ? "이로치 포켓몬을 또 잡았다!" : "이미 잡은 포켓몬입니다.");
+        dom.pokemonShine.classList.toggle("hidden", !pokemon.isShiny);
+    }, 1500);
+}
+
+function showNotification(message, type = "info") {
+    const notification = document.createElement("div");
+    const bgColor = type === "error" ? "bg-red-500" : "bg-blue-500";
+    notification.className = `fixed bottom-5 right-5 text-white px-4 py-2 rounded-lg shadow-lg z-50 ${bgColor}`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    setTimeout(() => { notification.remove(); }, 3000);
+}
+
+// --- 탭 전환 ---
+function switchMainTab(tabName) {
+    const isPokedex = tabName === 'pokedex';
+    dom.pokedexView.classList.toggle('hidden', !isPokedex);
+    dom.shopView.classList.toggle('hidden', isPokedex);
+    dom.mainTabPokedex.classList.toggle('border-blue-500', isPokedex);
+    dom.mainTabPokedex.classList.toggle('text-white', isPokedex);
+    dom.mainTabPokedex.classList.toggle('text-gray-500', !isPokedex);
+    dom.mainTabShop.classList.toggle('border-blue-500', !isPokedex);
+    dom.mainTabShop.classList.toggle('text-white', !isPokedex);
+    dom.mainTabShop.classList.toggle('text-gray-500', isPokedex);
+}
+
+// --- 관리자 페이지 기능 (생략 없이 기존 코드 유지) ---
 function openAdminPage() {
     dom.appContainer.classList.add('hidden');
     dom.adminPage.classList.remove('hidden');
@@ -500,211 +805,18 @@ function saveAdminChanges() {
     showNotification("관리자 설정이 저장되었습니다.");
 }
 
-function showNotification(message, type = "info") {
-    const notification = document.createElement("div");
-    const bgColor = type === "error" ? "bg-red-500" : "bg-blue-500";
-    notification.className = `fixed bottom-5 right-5 text-white px-4 py-2 rounded-lg shadow-lg z-50 ${bgColor}`;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    setTimeout(() => { notification.remove(); }, 3000);
-}
+// --- 애플리케이션 시작 ---
 
-// --- 나머지 함수들 (기존 코드와 동일) ---
-function hatchEgg(eggType) {
-    if (!data.inventory[eggType] || data.inventory[eggType] <= 0) return;
-    data.inventory[eggType]--;
-    const probabilities = data.probabilityConfig[eggType];
-    const caughtPokemon = selectRandomPokemon(probabilities);
-    if (!caughtPokemon) return;
-    const isShiny = Math.random() < (data.probabilityConfig.shiny[caughtPokemon.rarity] / 100);
-    const pokemonKey = `${caughtPokemon.id}_${isShiny ? "shiny" : "normal"}`;
-    const isNew = data.pokedex[pokemonKey] === undefined;
-    if (data.pokedex[pokemonKey]) {
-        data.pokedex[pokemonKey].count++;
-    } else {
-        data.pokedex[pokemonKey] = { ...caughtPokemon, isShiny: isShiny, count: 1 };
-    }
-    saveData();
+/**
+ * 애플리케이션을 초기화하고 실행하는 메인 함수입니다.
+ */
+function main() {
+    loadData();
+    setupUI();
+    setupListeners();
     renderAll();
-    showCaughtModal(data.pokedex[pokemonKey], isNew);
-}
-function updatePokedexProgress() {
-    const collectedIds = Object.keys(data.pokedex).map(key => key.split('_')[0]);
-    const uniqueCollectedCount = new Set(collectedIds).size;
-    const totalPokemonCount = POKEMON_DATA.length;
-    dom.pokedexProgress.textContent = `도감 완성도: ${uniqueCollectedCount} / ${totalPokemonCount}`;
-}
-function renderPokedex() {
-    dom.pokedexListContainer.innerHTML = "";
-    let filteredList;
-    if (pokedexTab === 'uncollected') {
-        const collectedIds = new Set(Object.keys(data.pokedex).map(key => key.split('_')[0]));
-        filteredList = POKEMON_DATA.filter(p => !collectedIds.has(String(p.id)));
-    } else {
-        let allCollected = Object.values(data.pokedex);
-        if (pokedexTab === 'duplicates') {
-            const countsById = {};
-            allCollected.forEach(p => { countsById[p.id] = (countsById[p.id] || 0) + p.count; });
-            filteredList = allCollected.filter(p => countsById[p.id] > 1);
-        } else {
-            filteredList = allCollected;
-        }
-    }
-    const genFilterValue = dom.genFilter.value;
-    const rarityFilterValue = dom.rarityFilter.value;
-    if (genFilterValue !== 'all') filteredList = filteredList.filter(p => p.gen == genFilterValue);
-    if (rarityFilterValue !== 'all') filteredList = filteredList.filter(p => p.rarity === rarityFilterValue);
-    filteredList.sort((a, b) => a.id - b.id || (a.isShiny ? 1 : 0) - (b.isShiny ? 1 : 0));
-    if (filteredList.length === 0) {
-        dom.pokedexListContainer.innerHTML = '<div class="text-center text-gray-500 py-8">해당하는 포켓몬이 없습니다.</div>';
-        showPokemonDetails(null);
-        return;
-    }
-    filteredList.forEach(pokemon => {
-        const pokemonKey = `${pokemon.id}_${pokemon.isShiny ? "shiny" : "normal"}`;
-        const isSelectedForSynthesis = synthesisSelection.includes(pokemonKey);
-        const li = document.createElement("div");
-        li.className = `pokedex-list-item p-2 rounded-md hover:bg-gray-700 cursor-pointer flex justify-between items-center ${selectedPokemonKey === pokemonKey ? "selected" : ""}`;
-        li.dataset.key = pokemonKey;
-        const nameClass = pokedexTab === 'uncollected' ? "text-gray-500" : "font-semibold";
-        const shinyMark = pokemon.isShiny ? "✨" : "";
-        let countDisplay = '';
-        if (pokedexTab !== 'uncollected') {
-            const synthesisMark = isSelectedForSynthesis ? '<span class="text-xs text-purple-400 mr-2">선택됨</span>' : '';
-            countDisplay = `<div>${synthesisMark}<span class="text-sm font-bold text-gray-300">x${pokemon.count || 0}</span></div>`;
-        }
-        li.innerHTML = `<div><span class="text-gray-400">#${String(pokemon.id).padStart(3, "0")}</span><span class="ml-3 ${nameClass}">${pokemon.name} ${shinyMark}</span></div>${countDisplay}`;
-        dom.pokedexListContainer.appendChild(li);
-    });
-    const currentSelectionExists = selectedPokemonKey && (data.pokedex[selectedPokemonKey] || pokedexTab === 'uncollected');
-    if (currentSelectionExists) {
-        showPokemonDetails(selectedPokemonKey);
-    } else if (filteredList.length > 0) {
-        const firstPokemon = filteredList[0];
-        showPokemonDetails(`${firstPokemon.id}_${firstPokemon.isShiny ? "shiny" : "normal"}`);
-    }
-}
-function showPokemonDetails(pokemonKey) {
-    selectedPokemonKey = pokemonKey;
-    let pokemon;
-    if (pokemonKey && data.pokedex[pokemonKey]) {
-        pokemon = data.pokedex[pokemonKey];
-    } else if (pokemonKey) {
-        const [id] = pokemonKey.split('_');
-        const basePokemon = POKEMON_DATA.find(p => p.id == id);
-        if (basePokemon) {
-            pokemon = { ...basePokemon, isShiny: pokemonKey.endsWith('shiny'), count: 0 };
-        }
-    }
-    if (!pokemon) {
-        dom.pokemonDetailView.innerHTML = '<p class="text-gray-500">리스트에서 포켓몬을 선택하세요.</p>';
-        return;
-    }
-    const hasPokemon = pokemon.count > 0;
-    const shinyClass = pokemon.isShiny ? "shiny-pokemon-image" : "";
-    const shinyText = pokemon.isShiny ? "shiny-text" : "text-white";
-    const shinyMark = pokemon.isShiny ? "✨" : "";
-    if (hasPokemon) {
-        const isSelectedForSynthesis = synthesisSelection.includes(selectedPokemonKey);
-        let synthesisButton = '';
-        if (pokedexTab === 'duplicates' && pokemon.count > 0) {
-            const disabled = synthesisSelection.length >= 3 && !isSelectedForSynthesis;
-            synthesisButton = isSelectedForSynthesis
-                ? `<button data-action="deselect-synthesis" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">합성 선택 해제</button>`
-                : `<button data-action="select-synthesis" class="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''}" ${disabled ? 'disabled' : ''}>합성용으로 선택</button>`;
-        }
-        dom.pokemonDetailView.innerHTML = `
-            <div class="w-full text-center">
-                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4 ${shinyClass}">
-                <h3 class="text-3xl font-bold ${shinyText}">${pokemon.name} ${shinyMark}</h3>
-                <p class="text-gray-400 mb-2">#${String(pokemon.id).padStart(3, "0")}</p>
-                <div class="flex justify-center items-center gap-2 mb-4">
-                    <span class="px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[pokemon.rarity]}">${pokemon.rarity}</span>
-                    <span class="text-lg font-bold">x${pokemon.count}</span>
-                </div>
-                ${synthesisButton}
-            </div>`;
-    } else {
-        dom.pokemonDetailView.innerHTML = `
-            <div class="w-full text-center">
-                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4 pokemon-silhouette">
-                <h3 class="text-3xl font-bold text-gray-500">???</h3>
-                <p class="text-gray-400 mb-2">#${String(pokemon.id).padStart(3, "0")}</p>
-                <div class="flex justify-center items-center gap-2 mb-4"><span class="px-3 py-1 text-sm font-semibold text-gray-200 bg-gray-600 rounded-full">${pokemon.rarity}</span></div>
-                <p class="text-gray-500">아직 발견하지 못한 포켓몬입니다.</p>
-            </div>`;
-    }
-    document.querySelectorAll(".pokedex-list-item").forEach(el => el.classList.remove("selected"));
-    const selectedElement = document.querySelector(`.pokedex-list-item[data-key='${pokemonKey}']`);
-    if (selectedElement) selectedElement.classList.add("selected");
-}
-function switchPokedexTab(tabName) {
-    pokedexTab = tabName;
-    synthesisSelection = [];
-    selectedPokemonKey = null;
-    const tabs = { collected: dom.pokedexTabCollected, duplicates: dom.pokedexTabDuplicates, uncollected: dom.pokedexTabUncollected };
-    for (const key in tabs) {
-        const isSelected = key === tabName;
-        tabs[key].classList.toggle("border-blue-500", isSelected);
-        tabs[key].classList.toggle("text-white", isSelected);
-        tabs[key].classList.toggle("text-gray-500", !isSelected);
-    }
-    dom.synthesisControls.classList.toggle("hidden", tabName !== 'duplicates');
-    updateSynthesisUI();
-    renderPokedex();
-}
-function handlePokedexListClick(event) {
-    const listItem = event.target.closest(".pokedex-list-item");
-    if (listItem) showPokemonDetails(listItem.dataset.key);
-}
-function handleDetailViewClick(event) {
-    const button = event.target.closest("button");
-    if (!button || !selectedPokemonKey) return;
-    const action = button.dataset.action;
-    const index = synthesisSelection.indexOf(selectedPokemonKey);
-    if (action === 'select-synthesis' && index === -1 && synthesisSelection.length < 3) {
-        synthesisSelection.push(selectedPokemonKey);
-    } else if (action === 'deselect-synthesis' && index > -1) {
-        synthesisSelection.splice(index, 1);
-    }
-    updateSynthesisUI();
-    renderPokedex();
-}
-function updateSynthesisUI() {
-    dom.synthesisCount.textContent = synthesisSelection.length;
-    dom.synthesisBtn.disabled = synthesisSelection.length !== 3;
-}
-function showCaughtModal(pokemon, isNew) {
-    dom.pokeballContainer.classList.remove("hidden");
-    dom.caughtPokemonInfo.classList.add("hidden");
-    const pokeballImg = dom.pokeballContainer.querySelector("img");
-    pokeballImg.classList.remove("pokeball-animation");
-    dom.modalCaught.classList.remove("hidden");
-    setTimeout(() => { pokeballImg.classList.add("pokeball-animation"); }, 100);
-    setTimeout(() => {
-        dom.pokeballContainer.classList.add("hidden");
-        dom.caughtPokemonInfo.classList.remove("hidden");
-        dom.pokemonName.innerHTML = `${pokemon.name} ${pokemon.isShiny ? '<span class="shiny-text">✨</span>' : ''}`;
-        dom.pokemonImage.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`;
-        dom.pokemonImage.className = `mx-auto h-48 w-48 object-contain mb-4 ${pokemon.isShiny ? "shiny-pokemon-image" : ""}`;
-        dom.pokemonId.textContent = `#${String(pokemon.id).padStart(3, "0")}`;
-        dom.pokemonRarity.textContent = pokemon.rarity;
-        dom.pokemonRarity.className = `px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[pokemon.rarity]}`;
-        dom.pokemonIsNew.textContent = isNew ? (pokemon.isShiny ? "✨ 새로운 이로치 포켓몬! ✨" : "✨ 새로운 포켓몬! ✨") : (pokemon.isShiny ? "이로치 포켓몬을 또 잡았다!" : "이미 잡은 포켓몬입니다.");
-        dom.pokemonShine.classList.toggle("hidden", !pokemon.isShiny);
-    }, 1500);
-}
-function switchMainTab(tabName) {
-    const isPokedex = tabName === 'pokedex';
-    dom.pokedexView.classList.toggle('hidden', !isPokedex);
-    dom.shopView.classList.toggle('hidden', isPokedex);
-    dom.mainTabPokedex.classList.toggle('border-blue-500', isPokedex);
-    dom.mainTabPokedex.classList.toggle('text-white', isPokedex);
-    dom.mainTabPokedex.classList.toggle('text-gray-500', !isPokedex);
-    dom.mainTabShop.classList.toggle('border-blue-500', !isPokedex);
-    dom.mainTabShop.classList.toggle('text-white', !isPokedex);
-    dom.mainTabShop.classList.toggle('text-gray-500', isPokedex);
 }
 
-main();
-
+// DOM이 완전히 로드된 후 메인 함수를 호출합니다.
+// 이렇게 하면 스크립트가 HTML 요소보다 먼저 실행되어 발생하는 오류를 방지할 수 있습니다.
+document.addEventListener('DOMContentLoaded', main);
