@@ -9,14 +9,8 @@ const defaultData = {
         epicEgg: 0,
         pityCount: 0
     },
-    rewardProbabilities: {
-        epic: 1,
-        rare: 4,
-        normal: 95
-    },
-    pitySystemConfig: {
-        threshold: 30
-    },
+    rewardProbabilities: { epic: 1, rare: 4, normal: 95 },
+    pitySystemConfig: { threshold: 30 },
     probabilityConfig: {
         normalEgg: { Common: 79, Rare: 17, Epic: 3, Legendary: 1 },
         rareEgg: { Common: 0, Rare: 80, Epic: 15, Legendary: 5 },
@@ -34,24 +28,14 @@ export let pokedexTab = 'collected';
 export let selectedPokemonKey = null;
 export let synthesisSelection = [];
 
-export function setPokedexTab(tab) {
-    pokedexTab = tab;
-}
-
-export function setSelectedPokemonKey(key) {
-    selectedPokemonKey = key;
-}
-
-export function clearSynthesisSelection() {
-    synthesisSelection = [];
-}
-
+export function setPokedexTab(tab) { pokedexTab = tab; }
+export function setSelectedPokemonKey(key) { selectedPokemonKey = key; }
+export function clearSynthesisSelection() { synthesisSelection = []; }
 export function addToSynthesisSelection(key) {
     if (synthesisSelection.length < 3 && !synthesisSelection.includes(key)) {
         synthesisSelection.push(key);
     }
 }
-
 export function removeFromSynthesisSelection(key) {
     const index = synthesisSelection.indexOf(key);
     if (index > -1) {
@@ -59,28 +43,26 @@ export function removeFromSynthesisSelection(key) {
     }
 }
 
-export const loadData = () => {
+export function loadData() {
     const savedData = JSON.parse(localStorage.getItem('pokemon-data-v3'));
     data = { ...defaultData, ...savedData };
-
-    data.inventory = { ...defaultData.inventory, ...(savedData ? savedData.inventory : {}) };
-    data.rewardProbabilities = { ...defaultData.rewardProbabilities, ...(savedData ? savedData.rewardProbabilities : {}) };
-    data.pitySystemConfig = { ...defaultData.pitySystemConfig, ...(savedData ? savedData.pitySystemConfig : {}) };
-    data.probabilityConfig = { ...defaultData.probabilityConfig, ...(savedData ? savedData.probabilityConfig : {}) };
-    data.shopConfig = { ...defaultData.shopConfig, ...(savedData ? savedData.shopConfig : {}) };
-
-    if (savedData && savedData.probabilityConfig) {
+    data.inventory = { ...defaultData.inventory, ...(savedData?.inventory || {}) };
+    data.rewardProbabilities = { ...defaultData.rewardProbabilities, ...(savedData?.rewardProbabilities || {}) };
+    data.pitySystemConfig = { ...defaultData.pitySystemConfig, ...(savedData?.pitySystemConfig || {}) };
+    data.probabilityConfig = { ...defaultData.probabilityConfig, ...(savedData?.probabilityConfig || {}) };
+    data.shopConfig = { ...defaultData.shopConfig, ...(savedData?.shopConfig || {}) };
+    if (savedData?.probabilityConfig) {
         data.probabilityConfig.normalEgg = { ...defaultData.probabilityConfig.normalEgg, ...savedData.probabilityConfig.normalEgg };
         data.probabilityConfig.rareEgg = { ...defaultData.probabilityConfig.rareEgg, ...savedData.probabilityConfig.rareEgg };
         data.probabilityConfig.epicEgg = { ...defaultData.probabilityConfig.epicEgg, ...savedData.probabilityConfig.epicEgg };
         data.probabilityConfig.shiny = { ...defaultData.probabilityConfig.shiny, ...savedData.probabilityConfig.shiny };
     }
-    if (savedData && savedData.shopConfig) {
+    if (savedData?.shopConfig) {
         data.shopConfig.sell = { ...defaultData.shopConfig.sell, ...savedData.shopConfig.sell };
         data.shopConfig.buy = { ...defaultData.shopConfig.buy, ...savedData.shopConfig.buy };
     }
 };
 
-export const saveData = () => {
+export function saveData() {
     localStorage.setItem('pokemon-data-v3', JSON.stringify(data));
 };
