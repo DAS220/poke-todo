@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>포켓몬 To-Do 리스트 (오프라인 최종판)</title>
+    <title>포켓몬 To-Do 리스트</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -96,25 +96,36 @@
             </header>
             <div class="flex-grow p-4 overflow-y-auto">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- 뽑기 확률 설정 -->
+                    <!-- 고정 할 일 관리 -->
                     <section>
-                        <h3 class="text-xl font-bold mb-2 text-green-400">알 부화 확률 설정 (%)</h3>
-                        <div id="admin-probability-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
-                    </section>
-                     <!-- 상점 가격 설정 -->
-                    <section>
-                        <h3 class="text-xl font-bold mb-2 text-blue-400">상점 가격 설정 (코인)</h3>
-                        <div id="admin-shop-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
-                    </section>
-                     <!-- 할 일 보상 설정 -->
-                    <section>
-                        <h3 class="text-xl font-bold mb-2 text-yellow-400">할 일 보상 설정</h3>
-                        <div id="admin-reward-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                        <h3 class="text-xl font-bold mb-2 text-orange-400">고정 할 일 관리</h3>
+                        <div id="admin-daily-todo-settings" class="space-y-2 bg-gray-900 p-4 rounded-lg max-h-48 overflow-y-auto">
+                            <!-- JS will render this -->
+                        </div>
+                        <div class="flex gap-2 mt-2">
+                            <input type="text" id="admin-new-daily-todo-input" placeholder="새로운 고정 할 일..." class="flex-grow bg-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-1 focus:ring-orange-400">
+                            <button id="admin-add-daily-todo-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg">추가</button>
+                        </div>
                     </section>
                     <!-- 인벤토리 편집 -->
                     <section>
                         <h3 class="text-xl font-bold mb-2 text-cyan-400">인벤토리 편집</h3>
                         <div id="admin-inventory-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                    </section>
+                    <!-- 할 일 보상 설정 -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-2 text-yellow-400">할 일 보상 설정</h3>
+                        <div id="admin-reward-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                    </section>
+                    <!-- 상점 가격 설정 -->
+                    <section>
+                        <h3 class="text-xl font-bold mb-2 text-blue-400">상점 가격 설정 (코인)</h3>
+                        <div id="admin-shop-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
+                    </section>
+                     <!-- 알 부화 확률 설정 -->
+                    <section class="md:col-span-2">
+                        <h3 class="text-xl font-bold mb-2 text-green-400">알 부화 확률 설정 (%)</h3>
+                        <div id="admin-probability-settings" class="space-y-4 bg-gray-900 p-4 rounded-lg"></div>
                     </section>
                 </div>
                  <!-- 포켓몬 보유량 편집 -->
