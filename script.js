@@ -12,6 +12,7 @@ let pokedexTab = 'collected';
 let selectedPokemonKey = null;
 let synthesisSelection = [];
 let todoIdsToComplete = [];
+let pokemonForComparison = null;
 
 const dom = {
     appContainer: document.getElementById('app-container'),
@@ -64,6 +65,7 @@ const dom = {
     passwordCancelBtn: document.getElementById('password-cancel-btn'),
     adminPasswordSetting: document.getElementById('admin-password-setting'),
     bulkCompleteBtn: document.getElementById('bulk-complete-btn'),
+    compareBtn: document.getElementById('compare-btn'),
 };
 
 const defaultData = {
@@ -184,18 +186,22 @@ const setupListeners = () => {
     dom.synthesisBtn.addEventListener('click', handleSynthesis);
     dom.shopSellList.addEventListener('click', (e) => handleShopAction(e, 'sell'));
     dom.shopBuyList.addEventListener('click', (e) => handleShopAction(e, 'buy'));
-    dom.modalCloseBtn.addEventListener('click', () => dom.modalCaught.classList.add('hidden'));
+    dom.modalCloseBtn.addEventListener('click', () => {
+        dom.modalCaught.classList.add('hidden');
+        dom.compareBtn.classList.add('hidden');
+        pokemonForComparison = null;
+    });
     dom.modalTestCloseBtn.addEventListener('click', () => dom.modalTestAlert.classList.add('hidden'));
     dom.adminCloseBtn.addEventListener('click', closeAdminPage);
     dom.adminSaveBtn.addEventListener('click', saveAdminChanges);
     dom.adminAddDailyTodoBtn.addEventListener('click', handleAdminAddDailyTodo);
     dom.adminDailyTodoSettings.addEventListener('click', handleAdminEditOrRemoveDailyTodo);
-    
     dom.passwordConfirmBtn.addEventListener('click', handlePasswordConfirm);
     dom.passwordCancelBtn.addEventListener('click', () => {
         dom.modalPassword.classList.add('hidden');
         todoIdsToComplete = [];
     });
+    dom.compareBtn.addEventListener('click', handleCompareToggle);
 };
 
 // --- 렌더링 함수 ---
@@ -811,7 +817,20 @@ function handleShopAction(event, actionType) {
 
 
 // --- 모달 및 알림 ---
+function handleCompareToggle() {
+    if (!pokemonForComparison) return;
+
+    const isCurrentlyShiny = dom.pokemonImage.src.includes('/shiny/');
+    const newImageUrl = isCurrentlyShiny
+        ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemonForComparison.id}.png`
+        : `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/${pokemonForComparison.id}.png`;
+
+    dom.pokemonImage.src = newImageUrl;
+    dom.compareBtn.textContent = isCurrentlyShiny ? '이로치 모습 보기' : '일반 모습 보기';
+}
+
 function showCaughtModal(pokemon, isNew, eggType) {
+    pokemonForComparison = pokemon;
     dom.pokeballContainer.classList.remove("hidden");
     dom.caughtPokemonInfo.classList.add("hidden");
     const pokeballImg = dom.pokeballContainer.querySelector("img");
@@ -833,6 +852,13 @@ function showCaughtModal(pokemon, isNew, eggType) {
         dom.pokemonRarity.textContent = pokemon.rarity;
         dom.pokemonRarity.className = `px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[pokemon.rarity]}`;
         dom.pokemonIsNew.textContent = isNew ? (pokemon.isShiny ? "✨ 새로운 이로치 포켓몬! ✨" : "✨ 새로운 포켓몬! ✨") : (pokemon.isShiny ? "이로치 포켓몬을 또 잡았다!" : "이미 잡은 포켓몬입니다.");
+        
+        if (pokemon.isShiny) {
+            dom.compareBtn.classList.remove('hidden');
+            dom.compareBtn.textContent = '일반 모습 보기';
+        } else {
+            dom.compareBtn.classList.add('hidden');
+        }
     }, 1500);
 }
 
