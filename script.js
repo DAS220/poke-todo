@@ -11,7 +11,7 @@ let data = {};
 let pokedexTab = 'collected';
 let selectedPokemonKey = null;
 let synthesisSelection = [];
-let todoIdToComplete = null;
+let todoIdsToComplete = [];
 
 const dom = {
     appContainer: document.getElementById('app-container'),
@@ -42,7 +42,6 @@ const dom = {
     caughtPokemonInfo: document.getElementById('caught-pokemon-info'),
     pokemonName: document.getElementById('pokemon-name'),
     pokemonImage: document.getElementById('pokemon-image'),
-    pokemonShine: document.getElementById('pokemon-shine'),
     pokemonRarity: document.getElementById('pokemon-rarity'),
     pokemonId: document.getElementById('pokemon-id'),
     pokemonIsNew: document.getElementById('pokemon-is-new'),
@@ -64,6 +63,7 @@ const dom = {
     passwordConfirmBtn: document.getElementById('password-confirm-btn'),
     passwordCancelBtn: document.getElementById('password-cancel-btn'),
     adminPasswordSetting: document.getElementById('admin-password-setting'),
+    bulkCompleteBtn: document.getElementById('bulk-complete-btn'),
 };
 
 const defaultData = {
@@ -78,7 +78,7 @@ const defaultData = {
     },
     dailyTodos: ["구몬하기", "책읽기", "듀오링고하기"],
     lastLoginDate: null,
-    completionPassword: "pass!",
+    completionPassword: "",
     rewardProbabilities: {
         epic: 1,
         rare: 4,
@@ -170,6 +170,7 @@ const setupUI = () => {
 const setupListeners = () => {
     dom.todoForm.addEventListener('submit', handleAddTodo);
     dom.todoList.addEventListener('click', handleTodoClick);
+    dom.bulkCompleteBtn.addEventListener('click', handleBulkComplete);
     dom.inventoryList.addEventListener('click', handleInventoryClick);
     dom.genFilter.addEventListener('change', renderPokedex);
     dom.rarityFilter.addEventListener('change', renderPokedex);
@@ -193,7 +194,7 @@ const setupListeners = () => {
     dom.passwordConfirmBtn.addEventListener('click', handlePasswordConfirm);
     dom.passwordCancelBtn.addEventListener('click', () => {
         dom.modalPassword.classList.add('hidden');
-        todoIdToComplete = null;
+        todoIdsToComplete = [];
     });
 };
 
@@ -228,70 +229,111 @@ function handleTodoClick(event) {
     const taskItem = event.target.closest(".task-item");
     if (!taskItem) return;
     const todoId = taskItem.dataset.id;
+
     if (event.target.matches(".complete-btn")) {
-        todoIdToComplete = todoId;
+        startCompletionProcess([todoId]);
+    } else if (event.target.matches(".delete-btn")) {
+        handleDeleteTodo(todoId);
+    } else if (event.target.matches(".todo-checkbox")) {
+        updateBulkCompleteButtonVisibility();
+    }
+}
+
+function handleBulkComplete() {
+    const checkedIds = [...dom.todoList.querySelectorAll('.todo-checkbox:checked')]
+        .map(checkbox => checkbox.closest('.task-item').dataset.id);
+    
+    if (checkedIds.length > 0) {
+        startCompletionProcess(checkedIds);
+    } else {
+        showNotification("완료할 항목을 선택해주세요.", "error");
+    }
+}
+
+function startCompletionProcess(ids) {
+    if (ids.length === 0) return;
+    todoIdsToComplete = ids;
+
+    if (data.completionPassword) {
         dom.passwordInput.value = '';
         dom.modalPassword.classList.remove('hidden');
         dom.passwordInput.focus();
-    } else if (event.target.matches(".delete-btn")) {
-        handleDeleteTodo(todoId);
+    } else {
+        processCompletions();
     }
 }
 
 function handlePasswordConfirm() {
     const password = dom.passwordInput.value;
     if (password === data.completionPassword) {
-        if (todoIdToComplete) {
-            handleCompleteTodo(todoIdToComplete);
-        }
+        processCompletions();
     } else {
         showNotification('확인번호가 일치하지 않습니다.', 'error');
     }
     dom.modalPassword.classList.add('hidden');
-    todoIdToComplete = null;
 }
 
-function handleCompleteTodo(todoId) {
-    const todo = data.todos[todoId];
-    if (!todo || todo.completed) return;
-    if (todo.text === "1q2w3e4r!") {
-        runTestMode();
-        delete data.todos[todoId];
-    } else {
-        todo.completed = true;
-        const pityThreshold = data.pitySystemConfig.threshold;
-        const currentPityCount = data.inventory.pityCount || 0;
-        let receivedEggName = '';
-        let notificationMessage = '';
-        if (currentPityCount >= pityThreshold) {
-            data.inventory.rareEgg++;
-            receivedEggName = EGG_TYPES.rareEgg.name;
-            data.inventory.pityCount = 0;
-            notificationMessage = `천장 시스템 발동! ${receivedEggName} 1개를 획득했습니다!`;
+function processCompletions() {
+    if (todoIdsToComplete.length === 0) return;
+
+    let rewardsSummary = { normalEgg: 0, rareEgg: 0, epicEgg: 0 };
+    let totalCompleted = 0;
+
+    todoIdsToComplete.forEach(id => {
+        const todo = data.todos[id];
+        if (!todo || todo.completed) return;
+
+        totalCompleted++;
+        if (todo.text === "1q2w3e4r!") {
+            runTestMode();
+            delete data.todos[id];
         } else {
-            const randomPercent = Math.random() * 100;
-            const probs = data.rewardProbabilities;
-            if (randomPercent < probs.epic) {
-                data.inventory.epicEgg++;
-                receivedEggName = EGG_TYPES.epicEgg.name;
-                data.inventory.pityCount = 0;
-            } else if (randomPercent < probs.epic + probs.rare) {
+            todo.completed = true;
+            const pityThreshold = data.pitySystemConfig.threshold;
+            
+            if (data.inventory.pityCount >= pityThreshold) {
                 data.inventory.rareEgg++;
-                receivedEggName = EGG_TYPES.rareEgg.name;
+                rewardsSummary.rareEgg++;
                 data.inventory.pityCount = 0;
             } else {
-                data.inventory.normalEgg++;
-                receivedEggName = EGG_TYPES.normalEgg.name;
-                data.inventory.pityCount++;
+                const randomPercent = Math.random() * 100;
+                const probs = data.rewardProbabilities;
+                if (randomPercent < probs.epic) {
+                    data.inventory.epicEgg++;
+                    rewardsSummary.epicEgg++;
+                    data.inventory.pityCount = 0;
+                } else if (randomPercent < probs.epic + probs.rare) {
+                    data.inventory.rareEgg++;
+                    rewardsSummary.rareEgg++;
+                    data.inventory.pityCount = 0;
+                } else {
+                    data.inventory.normalEgg++;
+                    rewardsSummary.normalEgg++;
+                    data.inventory.pityCount++;
+                }
             }
-            const remainingForPity = pityThreshold - (data.inventory.pityCount || 0);
-            notificationMessage = `${receivedEggName} 1개를 획득했습니다! (천장까지 ${remainingForPity}개)`;
         }
-        showNotification(notificationMessage);
+    });
+
+    if (totalCompleted > 0) {
+        let summaryMessage = `${totalCompleted}개의 할 일을 완료했습니다! 획득: `;
+        let rewardsParts = [];
+        if (rewardsSummary.normalEgg > 0) rewardsParts.push(`포켓몬 알 x${rewardsSummary.normalEgg}`);
+        if (rewardsSummary.rareEgg > 0) rewardsParts.push(`레어 알 x${rewardsSummary.rareEgg}`);
+        if (rewardsSummary.epicEgg > 0) rewardsParts.push(`에픽 알 x${rewardsSummary.epicEgg}`);
+        
+        if (rewardsParts.length > 0) {
+            showNotification(summaryMessage + rewardsParts.join(', '));
+        } else {
+            showNotification(`${totalCompleted}개의 할 일을 완료했습니다!`);
+        }
     }
+    
     saveData();
     renderAll();
+    todoIdsToComplete = [];
 }
+
 
 function handleDeleteTodo(todoId) {
     if (data.todos[todoId] && !data.todos[todoId].isDaily) {
@@ -332,22 +374,43 @@ function renderTodos() {
     const todos = Object.entries(data.todos);
     if (todos.length === 0) {
         dom.todoList.innerHTML = '<li class="text-gray-500 text-center py-4">할 일이 없습니다.</li>';
+        dom.bulkCompleteBtn.classList.add('hidden');
         return;
     }
+    let hasUncompletedTasks = false;
     todos.sort(([, a], [, b]) => (a.isDaily === b.isDaily) ? (a.completed - b.completed) : (b.isDaily ? 1 : -1))
          .forEach(([id, todo]) => {
+            if (!todo.completed) hasUncompletedTasks = true;
             const li = document.createElement("li");
             li.dataset.id = id;
             const completedClass = todo.completed ? "bg-gray-700 text-gray-500 line-through" : "bg-gray-800";
             li.className = `task-item flex items-center p-3 rounded-lg transition-colors ${completedClass}`;
+            
+            const checkbox = todo.completed ? '' : '<input type="checkbox" class="todo-checkbox mr-3 h-5 w-5 flex-shrink-0">';
             const dailyIcon = todo.isDaily ? '<span class="mr-2 text-yellow-400" title="고정 할 일">★</span>' : '';
             let buttons = !todo.completed ? `<button class="complete-btn bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-2 rounded-md mr-2">완료</button>` : '';
             if (!todo.isDaily) {
                 buttons += `<button class="delete-btn bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1 px-2 rounded-md">삭제</button>`;
             }
-            li.innerHTML = `${dailyIcon}<span class="flex-grow">${todo.text}</span> ${buttons}`;
+            li.innerHTML = `${checkbox}${dailyIcon}<span class="flex-grow">${todo.text}</span> <div class="flex-shrink-0">${buttons}</div>`;
             dom.todoList.appendChild(li);
         });
+    
+    if (hasUncompletedTasks) {
+        dom.bulkCompleteBtn.classList.remove('hidden');
+    } else {
+        dom.bulkCompleteBtn.classList.add('hidden');
+    }
+    updateBulkCompleteButtonVisibility();
+}
+
+function updateBulkCompleteButtonVisibility() {
+    const checkedCount = dom.todoList.querySelectorAll('.todo-checkbox:checked').length;
+    if (checkedCount > 0) {
+        dom.bulkCompleteBtn.textContent = `${checkedCount}개 항목 완료`;
+    } else {
+        dom.bulkCompleteBtn.textContent = '선택 항목 완료';
+    }
 }
 
 // --- 인벤토리 관련 함수 ---
@@ -504,8 +567,10 @@ function showPokemonDetails(pokemonKey) {
         dom.pokemonDetailView.innerHTML = '<p class="text-gray-500">리스트에서 포켓몬을 선택하세요.</p>';
         return;
     }
+    
+    let imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.isShiny ? 'shiny/' : ''}${pokemon.id}.png`;
+    
     const hasPokemon = pokemon.count > 0;
-    const shinyClass = pokemon.isShiny ? "shiny-pokemon-image" : "";
     const shinyText = pokemon.isShiny ? "shiny-text" : "text-white";
     const shinyMark = pokemon.isShiny ? "✨" : "";
     if (hasPokemon) {
@@ -519,7 +584,7 @@ function showPokemonDetails(pokemonKey) {
         }
         dom.pokemonDetailView.innerHTML = `
             <div class="w-full text-center">
-                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4 ${shinyClass}">
+                <img src="${imageUrl}" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4">
                 <h3 class="text-3xl font-bold ${shinyText}">${pokemon.name} ${shinyMark}</h3>
                 <p class="text-gray-400 mb-2">#${String(pokemon.id).padStart(3, "0")}</p>
                 <div class="flex justify-center items-center gap-2 mb-4">
@@ -531,7 +596,7 @@ function showPokemonDetails(pokemonKey) {
     } else {
         dom.pokemonDetailView.innerHTML = `
             <div class="w-full text-center">
-                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4 pokemon-silhouette">
+                <img src="${imageUrl}" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4 pokemon-silhouette">
                 <h3 class="text-3xl font-bold text-gray-500">???</h3>
                 <p class="text-gray-400 mb-2">#${String(pokemon.id).padStart(3, "0")}</p>
                 <div class="flex justify-center items-center gap-2 mb-4"><span class="px-3 py-1 text-sm font-semibold text-gray-200 bg-gray-600 rounded-full">${pokemon.rarity}</span></div>
@@ -733,11 +798,7 @@ function showCaughtModal(pokemon, isNew, eggType) {
     dom.caughtPokemonInfo.classList.add("hidden");
     const pokeballImg = dom.pokeballContainer.querySelector("img");
     
-    if (eggType && EGG_TYPES[eggType]) {
-        pokeballImg.src = EGG_TYPES[eggType].img;
-    } else {
-        pokeballImg.src = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
-    }
+    pokeballImg.src = (eggType && EGG_TYPES[eggType]) ? EGG_TYPES[eggType].img : 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
 
     pokeballImg.classList.remove("pokeball-animation");
     dom.modalCaught.classList.remove("hidden");
@@ -745,14 +806,15 @@ function showCaughtModal(pokemon, isNew, eggType) {
     setTimeout(() => {
         dom.pokeballContainer.classList.add("hidden");
         dom.caughtPokemonInfo.classList.remove("hidden");
+        
+        const imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.isShiny ? 'shiny/' : ''}${pokemon.id}.png`;
+        
         dom.pokemonName.innerHTML = `${pokemon.name} ${pokemon.isShiny ? '<span class="shiny-text">✨</span>' : ''}`;
-        dom.pokemonImage.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`;
-        dom.pokemonImage.className = `mx-auto h-48 w-48 object-contain mb-4 ${pokemon.isShiny ? "shiny-pokemon-image" : ""}`;
+        dom.pokemonImage.src = imageUrl;
         dom.pokemonId.textContent = `#${String(pokemon.id).padStart(3, "0")}`;
         dom.pokemonRarity.textContent = pokemon.rarity;
         dom.pokemonRarity.className = `px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[pokemon.rarity]}`;
         dom.pokemonIsNew.textContent = isNew ? (pokemon.isShiny ? "✨ 새로운 이로치 포켓몬! ✨" : "✨ 새로운 포켓몬! ✨") : (pokemon.isShiny ? "이로치 포켓몬을 또 잡았다!" : "이미 잡은 포켓몬입니다.");
-        dom.pokemonShine.classList.toggle("hidden", !pokemon.isShiny);
     }, 1500);
 }
 
@@ -791,7 +853,6 @@ function closeAdminPage() {
 }
 
 function renderAdminPage() {
-    // 비밀번호 설정 렌더링
     dom.adminPasswordSetting.value = data.completionPassword;
 
     dom.adminDailyTodoSettings.innerHTML = data.dailyTodos.map((todo, index) => `
@@ -872,11 +933,7 @@ function handleAdminEditOrRemoveDailyTodo(event) {
 }
 
 function saveAdminChanges() {
-    // 비밀번호 저장
-    const newPassword = dom.adminPasswordSetting.value.trim();
-    if (newPassword) {
-        data.completionPassword = newPassword;
-    }
+    data.completionPassword = dom.adminPasswordSetting.value.trim();
 
     const newDailyTodos = [];
     document.querySelectorAll('.admin-daily-todo-item').forEach(input => {
@@ -944,4 +1001,3 @@ function main() {
 }
 
 document.addEventListener('DOMContentLoaded', main);
-
