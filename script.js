@@ -354,7 +354,6 @@ function handleDeleteTodo(todoId) {
 function runTestMode() {
     const shuffled = [...POKEMON_DATA].sort(() => 0.5 - Math.random());
     
-    // 중복 일반 포켓몬 추가
     const testPokemon = shuffled.slice(0, 3);
     testPokemon.forEach(pokemon => {
         const pokemonKey = `${pokemon.id}_normal`;
@@ -365,7 +364,6 @@ function runTestMode() {
         }
     });
 
-    // 이로치 포켓몬 추가
     const shinyPokemon = shuffled.slice(3, 6);
     shinyPokemon.forEach(pokemon => {
         const pokemonKey = `${pokemon.id}_shiny`;
@@ -376,7 +374,6 @@ function runTestMode() {
         }
     });
 
-    // 알 추가
     data.inventory.normalEgg++;
     data.inventory.rareEgg++;
     data.inventory.epicEgg++;
@@ -606,6 +603,11 @@ function showPokemonDetails(pokemonKey) {
                 ? `<button data-action="deselect-synthesis" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">합성 선택 해제</button>`
                 : `<button data-action="select-synthesis" class="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''}" ${disabled ? 'disabled' : ''}>합성용으로 선택</button>`;
         }
+        let compareButton = '';
+        if (pokemon.isShiny) {
+            compareButton = `<button data-action="compare-pokedex" class="mt-2 w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">일반 모습 보기</button>`;
+        }
+
         dom.pokemonDetailView.innerHTML = `
             <div class="w-full text-center">
                 <img src="${imageUrl}" alt="${pokemon.name}" class="mx-auto h-48 w-48 object-contain mb-4">
@@ -615,6 +617,7 @@ function showPokemonDetails(pokemonKey) {
                     <span class="px-3 py-1 text-sm font-semibold text-white rounded-full ${RARITY_STYLES[pokemon.rarity]}">${pokemon.rarity}</span>
                     <span class="text-lg font-bold">x${pokemon.count}</span>
                 </div>
+                ${compareButton}
                 ${synthesisButton}
             </div>`;
     } else {
@@ -657,6 +660,12 @@ function handleDetailViewClick(event) {
     const button = event.target.closest("button");
     if (!button || !selectedPokemonKey) return;
     const action = button.dataset.action;
+    
+    if (action === 'compare-pokedex') {
+        handlePokedexCompareToggle();
+        return;
+    }
+
     const pokemonToSelect = data.pokedex[selectedPokemonKey];
     if (!pokemonToSelect || pokemonToSelect.count <= 1) {
         showNotification("합성에는 2마리 이상 보유한 포켓몬만 사용할 수 있습니다.", "error");
@@ -827,6 +836,23 @@ function handleCompareToggle() {
 
     dom.pokemonImage.src = newImageUrl;
     dom.compareBtn.textContent = isCurrentlyShiny ? '이로치 모습 보기' : '일반 모습 보기';
+}
+
+function handlePokedexCompareToggle() {
+    const pokemon = data.pokedex[selectedPokemonKey];
+    if (!pokemon || !pokemon.isShiny) return;
+
+    const imgElement = dom.pokemonDetailView.querySelector('img');
+    const btnElement = dom.pokemonDetailView.querySelector('[data-action="compare-pokedex"]');
+    if (!imgElement || !btnElement) return;
+
+    const isCurrentlyShiny = imgElement.src.includes('/shiny/');
+    const newImageUrl = isCurrentlyShiny
+        ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`
+        : `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/${pokemon.id}.png`;
+    
+    imgElement.src = newImageUrl;
+    btnElement.textContent = isCurrentlyShiny ? '이로치 모습 보기' : '일반 모습 보기';
 }
 
 function showCaughtModal(pokemon, isNew, eggType) {
