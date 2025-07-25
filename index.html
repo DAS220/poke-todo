@@ -28,6 +28,7 @@
                             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">추가</button>
                         </form>
                         <ul id="todo-list" class="space-y-2 max-h-60 overflow-y-auto pr-2"></ul>
+                        <button id="bulk-complete-btn" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded-lg transition-colors mt-2 hidden">선택 항목 완료</button>
                     </div>
                     <!-- 인벤토리 섹션 -->
                     <div>
@@ -99,9 +100,7 @@
                     <!-- 고정 할 일 관리 -->
                     <section>
                         <h3 class="text-xl font-bold mb-2 text-orange-400">고정 할 일 관리</h3>
-                        <div id="admin-daily-todo-settings" class="space-y-2 bg-gray-900 p-4 rounded-lg max-h-48 overflow-y-auto">
-                            <!-- JS will render this -->
-                        </div>
+                        <div id="admin-daily-todo-settings" class="space-y-2 bg-gray-900 p-4 rounded-lg max-h-48 overflow-y-auto"></div>
                         <div class="flex gap-2 mt-2">
                             <input type="text" id="admin-new-daily-todo-input" placeholder="새로운 고정 할 일..." class="flex-grow bg-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-1 focus:ring-orange-400">
                             <button id="admin-add-daily-todo-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg">추가</button>
@@ -117,7 +116,7 @@
                         <h3 class="text-xl font-bold mb-2 text-gray-400">시스템 설정</h3>
                         <div class="bg-gray-900 p-4 rounded-lg space-y-2">
                             <div class="flex justify-between items-center text-sm">
-                                <label for="admin-password-setting">할 일 완료 확인번호</label>
+                                <label for="admin-password-setting">할 일 완료 확인번호 (비워두면 비활성화)</label>
                                 <input type="text" id="admin-password-setting" class="w-40 bg-gray-700 rounded p-1 text-center">
                             </div>
                         </div>
@@ -158,7 +157,6 @@
                 <h2 class="text-3xl font-bold mb-2" id="pokemon-name"></h2>
                 <div class="relative inline-block">
                     <img id="pokemon-image" src="" alt="잡은 포켓몬" class="mx-auto h-48 w-48 object-contain mb-4">
-                    <div id="pokemon-shine" class="hidden shine-effect"></div>
                 </div>
                 <div class="flex justify-center items-center gap-2 mb-4">
                     <span id="pokemon-rarity" class="px-3 py-1 text-sm font-semibold text-white rounded-full"></span>
@@ -177,7 +175,6 @@
         </div>
     </div>
     
-    <!-- 비밀번호 확인 모달 -->
     <div id="modal-password" class="fixed inset-0 modal-bg flex items-center justify-center z-30 hidden">
         <div class="bg-gray-800 rounded-2xl shadow-2xl p-8 text-center max-w-sm w-full relative">
             <h2 class="text-2xl font-bold mb-4 text-yellow-400">확인번호 입력</h2>
@@ -193,4 +190,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
