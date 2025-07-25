@@ -347,6 +347,8 @@ function handleDeleteTodo(todoId) {
 
 function runTestMode() {
     const shuffled = [...POKEMON_DATA].sort(() => 0.5 - Math.random());
+    
+    // 중복 일반 포켓몬 추가
     const testPokemon = shuffled.slice(0, 3);
     testPokemon.forEach(pokemon => {
         const pokemonKey = `${pokemon.id}_normal`;
@@ -357,15 +359,28 @@ function runTestMode() {
         }
     });
 
+    // 이로치 포켓몬 추가
+    const shinyPokemon = shuffled.slice(3, 6);
+    shinyPokemon.forEach(pokemon => {
+        const pokemonKey = `${pokemon.id}_shiny`;
+        if (data.pokedex[pokemonKey]) {
+            data.pokedex[pokemonKey].count++;
+        } else {
+            data.pokedex[pokemonKey] = { ...pokemon, isShiny: true, count: 1 };
+        }
+    });
+
+    // 알 추가
     data.inventory.normalEgg++;
     data.inventory.rareEgg++;
     data.inventory.epicEgg++;
 
     saveData();
     renderAll();
+    
     const modal = document.getElementById('modal-test-alert');
     modal.querySelector('h2').textContent = '테스트 모드 활성화';
-    modal.querySelector('p').innerHTML = '중복 포켓몬 3종 (각 2마리)과<br>알 3종 (각 1개)이 추가되었습니다.';
+    modal.querySelector('p').innerHTML = '중복 포켓몬 3종 (각 2마리),<br>이로치 포켓몬 3종 (각 1마리),<br>알 3종 (각 1개)이 추가되었습니다.';
     modal.classList.remove("hidden");
 }
 
@@ -568,7 +583,10 @@ function showPokemonDetails(pokemonKey) {
         return;
     }
     
-    let imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.isShiny ? 'shiny/' : ''}${pokemon.id}.png`;
+    let imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`;
+    if (pokemon.isShiny) {
+        imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/${pokemon.id}.png`;
+    }
     
     const hasPokemon = pokemon.count > 0;
     const shinyText = pokemon.isShiny ? "shiny-text" : "text-white";
